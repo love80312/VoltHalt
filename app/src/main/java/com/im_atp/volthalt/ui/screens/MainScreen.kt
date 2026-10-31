@@ -56,7 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.im_atp.volthalt.AlarmPlayer
-import com.im_atp.volthalt.BatteryService
+import com.im_atp.volthalt.BatteryMonitoringController
 import com.im_atp.volthalt.PreferencesManager
 import com.im_atp.volthalt.R
 import kotlinx.coroutines.Dispatchers
@@ -347,13 +347,7 @@ fun MainScreen(
                 onToggle       = { newState ->
                     coroutineScope.launch {
                         preferencesManager.setAlarmEnabled(newState)
-                        if (newState) {
-                            val intent = Intent(context, BatteryService::class.java)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                                context.startForegroundService(intent)
-                            else
-                                context.startService(intent)
-                        }
+                        BatteryMonitoringController.sync(context, preferencesManager)
                     }
                 },
                 onClick = onNavigateToSettings
@@ -369,13 +363,7 @@ fun MainScreen(
                 onToggle       = { newState ->
                     coroutineScope.launch {
                         preferencesManager.setLowAlarmEnabled(newState)
-                        if (newState) {
-                            val intent = Intent(context, BatteryService::class.java)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                                context.startForegroundService(intent)
-                            else
-                                context.startService(intent)
-                        }
+                        BatteryMonitoringController.sync(context, preferencesManager)
                     }
                 },
                 onClick = onNavigateToSettings
