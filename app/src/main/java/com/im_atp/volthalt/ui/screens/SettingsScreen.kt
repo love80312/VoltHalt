@@ -59,7 +59,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.im_atp.volthalt.BatteryMonitoringController
 import com.im_atp.volthalt.PreferencesManager
 import com.im_atp.volthalt.R
 import kotlinx.coroutines.launch
@@ -268,7 +267,6 @@ fun SettingsScreen(
                     onCheckedChange = { enabled ->
                         coroutineScope.launch {
                             preferencesManager.setLowAlarmEnabled(enabled)
-                            BatteryMonitoringController.sync(context, preferencesManager)
                         }
                     },
                     colors = SwitchDefaults.colors(checkedTrackColor = lowAccent)
