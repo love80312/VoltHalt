@@ -9,19 +9,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
- * Quick Settings tile for VoltHalt.
+ * Quick Settings tile for the charging-limit alarm.
  *
- * The tile represents the max-battery alarm toggle, but shows as "active"
- * whenever either alarm is enabled — so it accurately reflects whether any
- * background monitoring is happening.
- *
- * Tapping the tile updates the UI immediately (no DataStore round-trip wait),
- * giving it a snappy feel. A flow collector keeps it in sync if the alarm state
- * changes from inside the app.
+ * The tile represents only the max-battery alarm setting. The low-battery alarm
+ * has its own setting in the app and does not change this tile's active state.
  */
 class AlarmTileService : TileService() {
 
@@ -36,12 +31,11 @@ class AlarmTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
+        listeningJob?.cancel()
         listeningJob = serviceScope.launch {
-            combine(
-                preferencesManager.alarmEnabledFlow,
-                preferencesManager.lowAlarmEnabledFlow
-            ) { maxEnabled, lowEnabled -> maxEnabled || lowEnabled }
-            .collect { anyEnabled -> applyTileState(anyEnabled) }
+            preferencesManager.alarmEnabledFlow.collect { maxAlarmEnabled ->
+                applyTileState(maxAlarmEnabled)
+            }
         }
     }
 
@@ -54,33 +48,30 @@ class AlarmTileService : TileService() {
     override fun onClick() {
         super.onClick()
 
-        val isCurrentlyActive = qsTile?.state == Tile.STATE_ACTIVE
-        val newActive = !isCurrentlyActive
+        val newActive = qsTile?.state != Tile.STATE_ACTIVE
 
-        // Update the tile immediately so it feels responsive to the tap.
+        // Update the tile immediately; the DataStore collector will confirm the state.
         applyTileState(newActive)
+        serviceScope.launch { preferencesManager.setAlarmEnabled(newActive) }
 
-        if (newActive) {
-            serviceScope.launch { preferencesManager.setAlarmEnabled(true) }
-            try {
+        try {
+            if (newActive) {
                 val intent = Intent(applicationContext, BatteryService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     applicationContext.startForegroundService(intent)
                 } else {
                     applicationContext.startService(intent)
                 }
-            } catch (_: Exception) {
-                // Background-start restriction on some OEMs — silently ignore.
-            }
-        } else {
-            serviceScope.launch { preferencesManager.setAlarmEnabled(false) }
-            try {
+            } else {
                 applicationContext.startService(
                     Intent(applicationContext, BatteryService::class.java).apply {
                         action = BatteryService.ACTION_STOP_MAX_ALARM_FROM_TILE
                     }
                 )
-            } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {
+            // Some OEMs restrict background service starts. The app UI can still
+            // be opened to review permissions and monitoring settings.
         }
     }
 

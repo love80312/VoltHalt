@@ -33,7 +33,7 @@ class PreferencesManager(private val context: Context) {
         // First-run setup
         private val SETUP_COMPLETED      = booleanPreferencesKey("setup_completed")
 
-        // Appearance — "system" | "light" | "dark"
+        // Appearance — "system" | "light" | "dark" | "comfort"
         val THEME_MODE                   = stringPreferencesKey("theme_mode")
 
         // Sound type — "ringtone" | "tts"
@@ -91,7 +91,7 @@ class PreferencesManager(private val context: Context) {
 
     // TTS setters
     suspend fun setMaxSoundType(type: String)           { context.dataStore.edit { it[MAX_SOUND_TYPE] = type } }
-    suspend fun setMaxTtsText(text: String)             { context.dataStore.edit { it[MAX_TTS_TEXT] = text } }
+    suspend fun setMaxTtsText(text: String)              { context.dataStore.edit { it[MAX_TTS_TEXT] = text } }
     suspend fun setLowSoundType(type: String)           { context.dataStore.edit { it[LOW_SOUND_TYPE] = type } }
-    suspend fun setLowTtsText(text: String)             { context.dataStore.edit { it[LOW_TTS_TEXT] = text } }
+    suspend fun setLowTtsText(text: String)              { context.dataStore.edit { it[LOW_TTS_TEXT] = text } }
 }
