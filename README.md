@@ -150,7 +150,7 @@ VoltHalt/
 │       │   ├── MainActivity.kt          # Main entry point and navigation
 │       │   ├── AlarmActivity.kt         # Full-screen alarm screen
 │       │   ├── BatteryService.kt        # Background battery monitoring
-│       │   ├── AlarmPlayer.kt            # Ringtone and TTS playback
+│       │   ├── AlarmPlayer.kt           # Ringtone and TTS playback
 │       │   ├── AlarmTileService.kt      # Quick Settings tile
 │       │   ├── PreferencesManager.kt    # Preferences DataStore access
 │       │   └── ui/
@@ -189,6 +189,14 @@ The app does **not** declare `INTERNET`, `READ_EXTERNAL_STORAGE`, `READ_MEDIA_AU
 For bug reports, include your Android version, device model, steps to reproduce, and expected versus actual behavior. Please use the [Issues page](https://github.com/love80312/VoltHalt/issues).
 
 Contributions and pull requests are welcome. Please keep changes focused and verify that the Android Debug build succeeds before submitting a pull request.
+
+## Modification attribution
+
+The fork-specific modifications introduced in this `test_fix` development work—including code changes, bug fixes, UI and theme adjustments, Traditional Chinese localization, audio-file selection, Quick Settings behavior, and documentation updates—were prepared and edited by **ChatGPT (OpenAI)** at the direction of the repository maintainer.
+
+The repository maintainer reviewed the changes, performed device testing, and manages the repository.
+
+This attribution applies only to modifications made for this fork as part of this work. It does not claim authorship of the original upstream VoltHalt project or third-party components. The original upstream project remains credited to [im-atp/VoltHalt](https://github.com/im-atp/VoltHalt), and its original MIT license and copyright notice are retained.
 
 ## License and upstream
 
