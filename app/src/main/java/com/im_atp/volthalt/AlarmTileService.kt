@@ -87,9 +87,9 @@ class AlarmTileService : TileService() {
     private fun applyTileState(active: Boolean) {
         val tile = qsTile ?: return
         tile.state = if (active) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        tile.label = if (active) "Alarm On" else "Alarm Off"
+        tile.label = getString(if (active) R.string.tile_alarm_on else R.string.tile_alarm_off)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            tile.subtitle = if (active) "Monitoring" else "Disabled"
+            tile.subtitle = getString(if (active) R.string.tile_monitoring else R.string.tile_disabled)
         }
         tile.updateTile()
     }

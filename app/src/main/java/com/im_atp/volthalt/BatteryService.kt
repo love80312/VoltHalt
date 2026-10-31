@@ -52,11 +52,11 @@ class BatteryService : Service() {
     private var maxEnabled   = false
     private var maxTarget    = 80
     private var maxSoundType = "ringtone"
-    private var maxTtsText   = "Battery charged"
+    private var maxTtsText   = ""
     private var lowEnabled   = false
     private var lowTarget    = 20
     private var lowSoundType = "ringtone"
-    private var lowTtsText   = "Low battery"
+    private var lowTtsText   = ""
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -81,6 +81,8 @@ class BatteryService : Service() {
         preferencesManager = PreferencesManager(applicationContext)
         alarmPlayer        = AlarmPlayer(applicationContext)
         createNotificationChannels()
+        maxTtsText = getString(R.string.default_max_tts)
+        lowTtsText = getString(R.string.default_low_tts)
 
         // Start collectors that keep the in-memory cache in sync with DataStore.
         // Each one is a single suspended collect() — negligible CPU, and DataStore
@@ -142,7 +144,7 @@ class BatteryService : Service() {
         }
 
         // Normal start — begin foreground monitoring.
-        startForeground(SERVICE_NOTIF_ID, createServiceNotification("Monitoring battery level…"))
+        startForeground(SERVICE_NOTIF_ID, createServiceNotification(getString(R.string.monitoring_battery)))
         return START_STICKY
     }
 
@@ -208,11 +210,11 @@ class BatteryService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val title = if (type == ALARM_TYPE_MAX) "⚡ Max Battery Reached!" else "🪫 Low Battery Warning!"
+        val title = if (type == ALARM_TYPE_MAX) getString(R.string.notification_max_battery_title) else getString(R.string.notification_low_battery_title)
         val body  = if (type == ALARM_TYPE_MAX)
-            "Battery has hit your target. Unplug now."
+            getString(R.string.notification_max_battery_message)
         else
-            "Battery is critically low. Please charge."
+            getString(R.string.notification_low_battery_message)
 
         val notification = NotificationCompat.Builder(this, ALARM_CHANNEL_ID)
             .setContentTitle(title)
@@ -220,7 +222,7 @@ class BatteryService : Service() {
             .setSmallIcon(R.drawable.ic_app_icon)
             .setContentIntent(fullScreenPending)
             .setFullScreenIntent(fullScreenPending, true)
-            .addAction(0, "Stop Alarm", stopPending)
+            .addAction(0, getString(R.string.stop_alarm), stopPending)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -263,7 +265,7 @@ class BatteryService : Service() {
     private fun cancelAlarmNotification() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(ALARM_NOTIF_ID)
-        nm.notify(SERVICE_NOTIF_ID, createServiceNotification("Monitoring battery level…"))
+        nm.notify(SERVICE_NOTIF_ID, createServiceNotification(getString(R.string.monitoring_battery)))
     }
 
     private fun broadcastAlarmStopped() {
@@ -282,11 +284,11 @@ class BatteryService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, SERVICE_CHANNEL_ID)
-            .setContentTitle("VoltHalt")
+            .setContentTitle(getString(R.string.app_name))
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_app_icon)
             .setContentIntent(openIntent)
-            .addAction(0, "Stop Monitoring", stopIntent)
+            .addAction(0, getString(R.string.stop_monitoring), stopIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
@@ -297,15 +299,15 @@ class BatteryService : Service() {
             val nm = getSystemService(NotificationManager::class.java)
 
             val serviceChannel = NotificationChannel(
-                SERVICE_CHANNEL_ID, "Battery Monitoring", NotificationManager.IMPORTANCE_LOW
+                SERVICE_CHANNEL_ID, getString(R.string.battery_monitoring_channel), NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Persistent notification while VoltHalt is monitoring battery."
+                description = getString(R.string.battery_monitoring_channel_description)
             }
 
             val alarmChannel = NotificationChannel(
-                ALARM_CHANNEL_ID, "Battery Alarm", NotificationManager.IMPORTANCE_HIGH
+                ALARM_CHANNEL_ID, getString(R.string.battery_alarm_channel), NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description          = "Shown when a battery alarm fires."
+                description          = getString(R.string.battery_alarm_channel_description)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 enableVibration(false)
                 setBypassDnd(true)

@@ -63,11 +63,11 @@ class PreferencesManager(private val context: Context) {
     // Appearance flow
     val themeModeFlow: Flow<String> = context.dataStore.data.map { it[THEME_MODE] ?: "system" }
 
-    // TTS flows
+    // TTS flows use localized defaults, while preserving user-customized messages.
     val maxSoundTypeFlow: Flow<String> = context.dataStore.data.map { it[MAX_SOUND_TYPE] ?: "ringtone" }
-    val maxTtsTextFlow: Flow<String>   = context.dataStore.data.map { it[MAX_TTS_TEXT] ?: "Battery charged" }
+    val maxTtsTextFlow: Flow<String>   = context.dataStore.data.map { it[MAX_TTS_TEXT] ?: context.getString(R.string.default_max_tts) }
     val lowSoundTypeFlow: Flow<String> = context.dataStore.data.map { it[LOW_SOUND_TYPE] ?: "ringtone" }
-    val lowTtsTextFlow: Flow<String>   = context.dataStore.data.map { it[LOW_TTS_TEXT] ?: "Low battery" }
+    val lowTtsTextFlow: Flow<String>   = context.dataStore.data.map { it[LOW_TTS_TEXT] ?: context.getString(R.string.default_low_tts) }
 
     // Max battery alarm setters
     suspend fun setAlarmEnabled(enabled: Boolean)       { context.dataStore.edit { it[ALARM_ENABLED] = enabled } }

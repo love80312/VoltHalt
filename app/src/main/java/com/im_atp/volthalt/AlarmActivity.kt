@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -171,11 +172,11 @@ private fun AlarmScreen(
     }
 
     val accentColor = if (isMaxBattery) Color(0xFF4ADE80) else Color(0xFFFB923C)
-    val title       = if (isMaxBattery) "Max Battery Reached!" else "Low Battery Warning!"
+    val title       = if (isMaxBattery) stringResource(R.string.max_battery_reached) else stringResource(R.string.low_battery_warning)
     val subtitle    = if (isMaxBattery)
-        "Your battery has hit the target level.\nUnplug your charger or press Stop to dismiss."
+        stringResource(R.string.max_battery_alarm_message)
     else
-        "Your battery is critically low.\nPlease plug in your charger."
+        stringResource(R.string.low_battery_alarm_message)
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
@@ -269,7 +270,7 @@ private fun AlarmScreen(
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
             ) {
                 Text(
-                    text          = "STOP ALARM",
+                    text          = stringResource(R.string.stop_alarm_uppercase),
                     fontSize      = 18.sp,
                     fontWeight    = FontWeight.ExtraBold,
                     letterSpacing = 2.sp
