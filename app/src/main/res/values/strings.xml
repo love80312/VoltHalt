@@ -1,3 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">VoltHalt</string>
+
+    <!-- Main screen -->
+    <string name="share_apk">Share APK</string>
+    <string name="share_apk_chooser">Share %1$s APK</string>
+    <string name="settings">Settings</string>
+    <string name="optimization_recommended">Optimization Recommended</string>
+    <string name="optimization_permissions_description">Grant permissions to ensure background alarms fire on time</string>
+    <string name="fix">Fix</string>
+    <string name="alarms">Alarms</string>
+    <string name="max_battery_alarm">Max Battery Alarm</string>
+    <string name="max_battery_alarm_description">Alert when battery is full while charging</string>
+    <string name="low_battery_alarm">Low Battery Alarm</string>
+    <string name="low_battery_alarm_description">Alert when battery drops below threshold</string>
+    <string name="threshold_label">%1$d%% threshold</string>
+    <string name="configure_alarm_settings">Configure Alarm Settings</string>
+    <string name="preview_alarm">Preview Alarm</string>
+    <string name="preview_playing">Preview Playing…</string>
+    <string name="tap_to_stop_preview">Tap to stop · auto-stops in 5s</string>
+    <string name="test_alarm_sound">Test how your alarm will sound</string>
+    <string name="choose_alarm_preview">Choose which alarm you want to preview.</string>
+    <string name="preview_instructions">Plays for 5 seconds using your saved settings.</string>
+    <string name="preview_charge_description">Fires when battery hits the charge threshold</string>
+    <string name="preview_low_description">Fires when battery drops below threshold</string>
+    <string name="stop_preview">Stop Preview</string>
+    <string name="play">Play</string>
+    <string name="charging">Charging</string>
+    <string name="not_charging">Not Charging</string>
+
+    <!-- Settings screen -->
+    <string name="back">Back</string>
+    <string name="max_alarm_settings_description">Triggers when battery reaches the selected percentage while charging</string>
+    <string name="target_percentage">Target Percentage</string>
+    <string name="charge_target_description">Alarm fires when charging battery reaches this level</string>
+    <string name="low_alarm_settings_description">Triggers when battery drops below threshold while unplugged</string>
+    <string name="enable_low_battery_alarm">Enable Low Battery Alarm</string>
+    <string name="enable_low_alarm_description">Turn on to activate low battery monitoring</string>
+    <string name="trigger_percentage">Trigger Percentage</string>
+    <string name="low_target_description">Alarm fires when unplugged battery drops to this level</string>
+    <string name="setup_permissions">Setup &amp; Permissions</string>
+    <string name="setup_permissions_description">Permissions, tile &amp; background setup wizard</string>
+    <string name="rerun_setup_wizard">Re-run Setup Wizard</string>
+    <string name="reconfigure_permissions">Re-configure permissions, battery optimization or QS tile</string>
+    <string name="text_to_speech">Text to Speech</string>
+    <string name="voice_engine">Voice engine, speed &amp; pitch</string>
+    <string name="configure_tts_voice">Configure TTS Voice</string>
+    <string name="tts_voice_description">Set speech rate, pitch and preferred engine in Android Settings</string>
+    <string name="opens_android_settings">Opens Android Settings</string>
+    <string name="appearance">Appearance</string>
+    <string name="appearance_description">Choose your preferred colour theme</string>
+    <string name="app_theme">App Theme</string>
+    <string name="theme_changes_immediately">Changes take effect immediately across the whole app</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="alarm_sound">Alarm Sound</string>
+    <string name="alarm_sound_description">Choose between a ringtone or a spoken message</string>
+    <string name="ringtone">Ringtone</string>
+    <string name="selected_ringtone">Selected Ringtone</string>
+    <string name="custom_ringtone_selected">Custom ringtone selected</string>
+    <string name="default_alarm_ringtone">Default alarm ringtone</string>
+    <string name="change">Change</string>
+    <string name="spoken_when_alarm_fires">Spoken when alarm fires:</string>
+    <string name="tts_placeholder">Type what the alarm should say…</string>
+    <string name="save_message">Save Message</string>
+    <string name="playing">Playing…</string>
+    <string name="test_voice">Test Voice</string>
+    <string name="alarm_volume">Alarm Volume</string>
+    <string name="independent_system_volume">Independent of system volume</string>
+    <string name="vibration">Vibration</string>
+    <string name="vibrate_when_alarm_triggers">Vibrate when alarm triggers</string>
+
+    <!-- Setup wizard -->
+    <string name="welcome_to">Welcome to</string>
+    <string name="setup_intro">Let\'s set up a few things to ensure your alarm works perfectly in the background.</string>
+    <string name="notifications">Notifications</string>
+    <string name="notifications_description">Required to alert you when your battery reaches the target level.</string>
+    <string name="allow">Allow</string>
+    <string name="unrestricted_battery">Unrestricted Battery</string>
+    <string name="unrestricted_battery_description">Crucial for background monitoring. Disabling battery optimization is completely safe and does not harm your device — it is only required to ensure VoltHalt rings on time and the Quick Settings tile stays responsive.</string>
+    <string name="disable_optimization">Disable Optimization</string>
+    <string name="alarm_popup_permission">Alarm Pop-up Permission</string>
+    <string name="alarm_popup_description">Lets VoltHalt show a full-screen alert over your lock screen when the alarm fires. Without this, the alarm will only show as a notification.</string>
+    <string name="allow_popups">Allow Pop-ups</string>
+    <string name="quick_settings_tile">Quick Settings Tile</string>
+    <string name="quick_settings_tile_description">Add a convenient toggle to your swipe-down menu for instant access to turn the alarm on or off.</string>
+    <string name="add_tile">Add Tile</string>
+    <string name="finish_setup">Finish Setup</string>
+    <string name="completed">Completed</string>
+
+    <!-- Alarm screen -->
+    <string name="max_battery_reached">Max Battery Reached!</string>
+    <string name="low_battery_warning">Low Battery Warning!</string>
+    <string name="max_battery_alarm_message">Your battery has hit the target level.\nUnplug your charger or press Stop to dismiss.</string>
+    <string name="low_battery_alarm_message">Your battery is critically low.\nPlease plug in your charger.</string>
+    <string name="stop_alarm">Stop Alarm</string>
+    <string name="stop_alarm_uppercase">STOP ALARM</string>
+
+    <!-- Notifications and Quick Settings -->
+    <string name="monitoring_battery">Monitoring battery level…</string>
+    <string name="stop_monitoring">Stop Monitoring</string>
+    <string name="battery_monitoring_channel">Battery Monitoring</string>
+    <string name="battery_monitoring_channel_description">Persistent notification while VoltHalt is monitoring battery.</string>
+    <string name="battery_alarm_channel">Battery Alarm</string>
+    <string name="battery_alarm_channel_description">Shown when a battery alarm fires.</string>
+    <string name="notification_max_battery_title">⚡ Max Battery Reached!</string>
+    <string name="notification_low_battery_title">🪫 Low Battery Warning!</string>
+    <string name="notification_max_battery_message">Battery has hit your target. Unplug now.</string>
+    <string name="notification_low_battery_message">Battery is critically low. Please charge.</string>
+    <string name="tile_alarm_on">Alarm On</string>
+    <string name="tile_alarm_off">Alarm Off</string>
+    <string name="tile_monitoring">Monitoring</string>
+    <string name="tile_disabled">Disabled</string>
+
+    <!-- Default spoken alarm messages -->
+    <string name="default_max_tts">Battery charged</string>
+    <string name="default_low_tts">Low battery</string>
 </resources>
