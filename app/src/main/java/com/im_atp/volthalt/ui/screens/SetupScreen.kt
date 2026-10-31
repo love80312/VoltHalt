@@ -105,7 +105,7 @@ fun SetupScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text  = "Welcome to",
+                text  = stringResource(R.string.welcome_to),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
             )
@@ -119,7 +119,7 @@ fun SetupScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text      = "Let's set up a few things to ensure your alarm works perfectly in the background.",
+                text      = stringResource(R.string.setup_intro),
                 style     = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color     = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
@@ -129,22 +129,22 @@ fun SetupScreen(
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 SetupStepCard(
-                    title       = "Notifications",
-                    description = "Required to alert you when your battery reaches the target level.",
+                    title       = stringResource(R.string.notifications),
+                    description = stringResource(R.string.notifications_description),
                     icon        = Icons.Default.Notifications,
                     isCompleted = isNotificationsGranted,
-                    actionText  = "Allow",
+                    actionText  = stringResource(R.string.allow),
                     onAction    = onRequestNotifications
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
             SetupStepCard(
-                title       = "Unrestricted Battery",
-                description = "Crucial for background monitoring. Disabling battery optimization is completely safe and does not harm your device — it is only required to ensure VoltHalt rings on time and the Quick Settings tile stays responsive.",
+                title       = stringResource(R.string.unrestricted_battery),
+                description = stringResource(R.string.unrestricted_battery_description),
                 icon        = Icons.Default.BatteryAlert,
                 isCompleted = isBatteryUnrestricted,
-                actionText  = "Disable Optimization",
+                actionText  = stringResource(R.string.disable_optimization),
                 onAction    = onRequestBattery
             )
 
@@ -152,11 +152,11 @@ fun SetupScreen(
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 SetupStepCard(
-                    title       = "Alarm Pop-up Permission",
-                    description = "Lets VoltHalt show a full-screen alert over your lock screen when the alarm fires. Without this, the alarm will only show as a notification.",
+                    title       = stringResource(R.string.alarm_popup_permission),
+                    description = stringResource(R.string.alarm_popup_description),
                     icon        = Icons.Default.NotificationImportant,
                     isCompleted = isFullScreenIntentGranted,
-                    actionText  = "Allow Pop-ups",
+                    actionText  = stringResource(R.string.allow_popups),
                     onAction    = onRequestFullScreenIntent
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -164,11 +164,11 @@ fun SetupScreen(
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 SetupStepCard(
-                    title       = "Quick Settings Tile",
-                    description = "Add a convenient toggle to your swipe-down menu for instant access to turn the alarm on or off.",
+                    title       = stringResource(R.string.quick_settings_tile),
+                    description = stringResource(R.string.quick_settings_tile_description),
                     icon        = Icons.Default.Settings,
                     isCompleted = isTileAdded,
-                    actionText  = "Add Tile",
+                    actionText  = stringResource(R.string.add_tile),
                     onAction    = {
                         onRequestTile()
                         isTileAdded = true
@@ -190,7 +190,7 @@ fun SetupScreen(
                 )
             ) {
                 Text(
-                    text       = "Finish Setup",
+                    text       = stringResource(R.string.finish_setup),
                     style      = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -254,7 +254,7 @@ fun SetupStepCard(
                     )
                     if (isCompleted) {
                         Text(
-                            text       = "Completed",
+                            text       = stringResource(R.string.completed),
                             style      = MaterialTheme.typography.bodySmall,
                             color      = Color(0xFF4CAF50),
                             fontWeight = FontWeight.SemiBold

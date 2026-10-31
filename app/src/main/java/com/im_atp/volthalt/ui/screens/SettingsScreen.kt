@@ -55,10 +55,12 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.im_atp.volthalt.PreferencesManager
+import com.im_atp.volthalt.R
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -77,7 +79,7 @@ fun SettingsScreen(
     val maxRingtone  by preferencesManager.ringtoneUriFlow.collectAsState(initial = null)
     val maxVolume    by preferencesManager.alarmVolumeFlow.collectAsState(initial = 80)
     val maxSoundType by preferencesManager.maxSoundTypeFlow.collectAsState(initial = "ringtone")
-    val maxTtsText   by preferencesManager.maxTtsTextFlow.collectAsState(initial = "Battery charged")
+    val maxTtsText   by preferencesManager.maxTtsTextFlow.collectAsState(initial = stringResource(R.string.default_max_tts))
 
     // Low battery alarm state
     val lowEnabled   by preferencesManager.lowAlarmEnabledFlow.collectAsState(initial = false)
@@ -86,7 +88,7 @@ fun SettingsScreen(
     val lowRingtone  by preferencesManager.lowRingtoneUriFlow.collectAsState(initial = null)
     val lowVolume    by preferencesManager.lowAlarmVolumeFlow.collectAsState(initial = 80)
     val lowSoundType by preferencesManager.lowSoundTypeFlow.collectAsState(initial = "ringtone")
-    val lowTtsText   by preferencesManager.lowTtsTextFlow.collectAsState(initial = "Low battery")
+    val lowTtsText   by preferencesManager.lowTtsTextFlow.collectAsState(initial = stringResource(R.string.default_low_tts))
 
     // Appearance state
     val themeMode by preferencesManager.themeModeFlow.collectAsState(initial = "system")
@@ -113,11 +115,11 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.settings), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         @Suppress("DEPRECATION")
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 }
             )
@@ -136,15 +138,15 @@ fun SettingsScreen(
 
             // Max Battery Alarm section
             AlarmSectionHeader(
-                title     = "Max Battery Alarm",
-                subtitle  = "Triggers when battery hits the target % while charging",
+                title     = stringResource(R.string.max_battery_alarm),
+                subtitle  = stringResource(R.string.max_alarm_settings_description),
                 icon      = Icons.Default.BatteryChargingFull,
                 iconColor = maxAccent
             )
 
             PercentageSliderRow(
-                label       = "Target Percentage",
-                description = "Alarm fires when charging battery reaches this level",
+                label       = stringResource(R.string.target_percentage),
+                description = stringResource(R.string.charge_target_description),
                 value       = maxTarget,
                 range       = 10f..100f,
                 steps       = 89,
@@ -175,8 +177,8 @@ fun SettingsScreen(
 
             // Low Battery Alarm section
             AlarmSectionHeader(
-                title     = "Low Battery Alarm",
-                subtitle  = "Triggers when battery drops below threshold while unplugged",
+                title     = stringResource(R.string.low_battery_alarm),
+                subtitle  = stringResource(R.string.low_alarm_settings_description),
                 icon      = Icons.Default.BatteryAlert,
                 iconColor = lowAccent
             )
@@ -189,9 +191,9 @@ fun SettingsScreen(
                 verticalAlignment     = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Enable Low Battery Alarm", fontWeight = FontWeight.Medium, fontSize = 15.sp)
+                    Text(stringResource(R.string.enable_low_battery_alarm), fontWeight = FontWeight.Medium, fontSize = 15.sp)
                     Text(
-                        "Turn on to activate low battery monitoring",
+                        stringResource(R.string.enable_low_alarm_description),
                         fontSize = 13.sp,
                         color    = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -204,8 +206,8 @@ fun SettingsScreen(
             }
             SettingsDivider()
             PercentageSliderRow(
-                label       = "Trigger Percentage",
-                description = "Alarm fires when unplugged battery drops to this level",
+                label       = stringResource(R.string.trigger_percentage),
+                description = stringResource(R.string.low_target_description),
                 value       = lowTarget,
                 range       = 5f..50f,
                 steps       = 44,
@@ -287,9 +289,9 @@ private fun SetupSectionHeader() {
         }
         Spacer(Modifier.width(14.dp))
         Column {
-            Text("Setup & Permissions", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = accentColor)
+            Text(stringResource(R.string.setup_permissions), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = accentColor)
             Text(
-                "Permissions, tile & background setup wizard",
+                stringResource(R.string.setup_permissions_description),
                 fontSize = 12.sp,
                 color    = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -338,14 +340,14 @@ private fun SetupWizardRow(onNavigateToSetup: () -> Unit) {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Re-run Setup Wizard",
+                    stringResource(R.string.rerun_setup_wizard),
                     fontWeight = FontWeight.SemiBold,
                     fontSize   = 15.sp,
                     color      = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "Re-configure permissions, battery optimization or QS tile",
+                    stringResource(R.string.reconfigure_permissions),
                     fontSize   = 12.sp,
                     lineHeight = 17.sp,
                     color      = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
@@ -410,8 +412,8 @@ private fun TtsSettingsRow() {
         }
         Spacer(Modifier.width(14.dp))
         Column {
-            Text("Text-to-Speech", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = accentColor)
-            Text("Voice engine, speed & pitch", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.text_to_speech), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = accentColor)
+            Text(stringResource(R.string.voice_engine), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
@@ -458,14 +460,14 @@ private fun TtsSettingsRow() {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Configure TTS Voice",
+                    stringResource(R.string.configure_tts_voice),
                     fontWeight = FontWeight.SemiBold,
                     fontSize   = 15.sp,
                     color      = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "Set speech rate, pitch and preferred engine in Android Settings",
+                    stringResource(R.string.tts_voice_description),
                     fontSize   = 12.sp,
                     lineHeight = 17.sp,
                     color      = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
@@ -477,7 +479,7 @@ private fun TtsSettingsRow() {
             @Suppress("DEPRECATION")
             Icon(
                 Icons.Default.OpenInNew,
-                contentDescription = "Opens Android Settings",
+                contentDescription = stringResource(R.string.opens_android_settings),
                 tint     = accentColor.copy(alpha = 0.7f),
                 modifier = Modifier.size(18.dp)
             )
@@ -505,8 +507,8 @@ private fun AppearanceSectionHeader() {
         }
         Spacer(Modifier.width(14.dp))
         Column {
-            Text("Appearance", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = primaryColor)
-            Text("Choose your preferred colour theme", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.appearance), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = primaryColor)
+            Text(stringResource(R.string.appearance_description), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -515,10 +517,10 @@ private fun AppearanceSectionHeader() {
 @Composable
 private fun AppearanceThemeRow(currentMode: String, onModeChange: (String) -> Unit) {
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        Text("App Theme", fontWeight = FontWeight.Medium, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+        Text(stringResource(R.string.app_theme), fontWeight = FontWeight.Medium, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(4.dp))
         Text(
-            "Changes take effect immediately across the whole app",
+            stringResource(R.string.theme_changes_immediately),
             fontSize = 12.sp,
             color    = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -534,7 +536,7 @@ private fun AppearanceThemeRow(currentMode: String, onModeChange: (String) -> Un
                         Icon(Icons.Default.SettingsBrightness, contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
                     }
                 }
-            ) { Text("System") }
+            ) { Text(stringResource(R.string.theme_system)) }
 
             SegmentedButton(
                 selected = currentMode == "light",
@@ -545,7 +547,7 @@ private fun AppearanceThemeRow(currentMode: String, onModeChange: (String) -> Un
                         Icon(Icons.Default.LightMode, contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
                     }
                 }
-            ) { Text("Light") }
+            ) { Text(stringResource(R.string.theme_light)) }
 
             SegmentedButton(
                 selected = currentMode == "dark",
@@ -556,7 +558,7 @@ private fun AppearanceThemeRow(currentMode: String, onModeChange: (String) -> Un
                         Icon(Icons.Default.DarkMode, contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
                     }
                 }
-            ) { Text("Dark") }
+            ) { Text(stringResource(R.string.theme_dark)) }
         }
     }
 }
@@ -578,14 +580,14 @@ private fun AlarmSoundBlock(
 
     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
         Text(
-            "Alarm Sound",
+            stringResource(R.string.alarm_sound),
             fontWeight = FontWeight.Medium,
             fontSize   = 15.sp,
             color      = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            "Choose between a ringtone or a spoken message",
+            stringResource(R.string.alarm_sound_description),
             fontSize = 12.sp,
             color    = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
         )
@@ -601,7 +603,7 @@ private fun AlarmSoundBlock(
                         Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
                     }
                 }
-            ) { Text("Ringtone") }
+            ) { Text(stringResource(R.string.ringtone)) }
 
             SegmentedButton(
                 selected = soundType == "tts",
@@ -613,7 +615,7 @@ private fun AlarmSoundBlock(
                         Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
                     }
                 }
-            ) { Text("Text to Speech") }
+            ) { Text(stringResource(R.string.text_to_speech)) }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -642,13 +644,13 @@ private fun AlarmSoundBlock(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Selected Ringtone",
+                                stringResource(R.string.selected_ringtone),
                                 fontWeight = FontWeight.Medium,
                                 fontSize   = 14.sp,
                                 color      = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
                             )
                             Text(
-                                if (!currentRingtoneUri.isNullOrEmpty()) "Custom ringtone selected" else "Default alarm ringtone",
+                                if (!currentRingtoneUri.isNullOrEmpty()) stringResource(R.string.custom_ringtone_selected) else stringResource(R.string.default_alarm_ringtone),
                                 fontSize = 12.sp,
                                 color    = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
                             )
@@ -659,7 +661,7 @@ private fun AlarmSoundBlock(
                             shape          = RoundedCornerShape(10.dp),
                             modifier       = Modifier.height(36.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp)
-                        ) { Text("Change", fontSize = 13.sp) }
+                        ) { Text(stringResource(R.string.change), fontSize = 13.sp) }
                     }
                 }
             }
@@ -682,7 +684,7 @@ private fun TtsTextRow(
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            "Spoken when alarm fires:",
+            stringResource(R.string.spoken_when_alarm_fires),
             fontSize   = 12.sp,
             fontWeight = FontWeight.Medium,
             color      = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
@@ -695,7 +697,7 @@ private fun TtsTextRow(
             enabled       = enabled,
             minLines      = 2,
             maxLines      = 4,
-            placeholder   = { Text("Type what the alarm should say\u2026") },
+            placeholder   = { Text(stringResource(R.string.tts_placeholder)) },
             shape         = RoundedCornerShape(12.dp),
             colors        = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = accentColor,
@@ -716,7 +718,7 @@ private fun TtsTextRow(
                 colors   = ButtonDefaults.outlinedButtonColors(contentColor = accentColor),
                 border   = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
             ) {
-                Text("Save Message", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.save_message), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -768,7 +770,7 @@ private fun TtsTextRow(
             @Suppress("DEPRECATION")
             Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text(if (isTesting) "Playing…" else "Test Voice", fontWeight = FontWeight.SemiBold)
+            Text(if (isTesting) stringResource(R.string.playing) else stringResource(R.string.test_voice), fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -849,9 +851,9 @@ private fun PercentageSliderRow(
 private fun VolumeSliderRow(value: Int, onValue: (Int) -> Unit, enabled: Boolean = true) {
     val alpha = if (enabled) 1f else 0.38f
     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-        Text("Alarm Volume", fontWeight = FontWeight.Medium, fontSize = 15.sp,
+        Text(stringResource(R.string.alarm_volume), fontWeight = FontWeight.Medium, fontSize = 15.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
-        Text("Independent of system volume", fontSize = 12.sp,
+        Text(stringResource(R.string.independent_system_volume), fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
             @Suppress("DEPRECATION")
@@ -889,9 +891,9 @@ private fun VibrationRow(checked: Boolean, onChanged: (Boolean) -> Unit, enabled
         verticalAlignment     = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("Vibration", fontWeight = FontWeight.Medium, fontSize = 15.sp,
+            Text(stringResource(R.string.vibration), fontWeight = FontWeight.Medium, fontSize = 15.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
-            Text("Vibrate when alarm triggers", fontSize = 12.sp,
+            Text(stringResource(R.string.vibrate_when_alarm_triggers), fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
         }
         Switch(

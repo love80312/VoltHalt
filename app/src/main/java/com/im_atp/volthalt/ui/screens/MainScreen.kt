@@ -119,7 +119,7 @@ private suspend fun shareApk(context: Context) = withContext(Dispatchers.IO) {
         }
 
         context.startActivity(
-            Intent.createChooser(shareIntent, "Share ${context.getString(R.string.app_name)} APK")
+            Intent.createChooser(shareIntent, context.getString(R.string.share_apk_chooser, context.getString(R.string.app_name)))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     } catch (e: Exception) {
@@ -233,14 +233,14 @@ fun MainScreen(
                     IconButton(onClick = { coroutineScope.launch { shareApk(context) } }) {
                         Icon(
                             Icons.Default.Share,
-                            contentDescription = "Share APK",
+                            contentDescription = stringResource(R.string.share_apk),
                             tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = stringResource(R.string.settings),
                             tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
@@ -296,13 +296,13 @@ fun MainScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Optimization Recommended",
+                                stringResource(R.string.optimization_recommended),
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize   = 14.sp,
                                 color      = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                "Grant permissions to ensure background alarms fire on time",
+                                stringResource(R.string.optimization_permissions_description),
                                 fontSize   = 12.sp,
                                 lineHeight = 16.sp,
                                 color      = MaterialTheme.colorScheme.onSurfaceVariant
@@ -315,7 +315,7 @@ fun MainScreen(
                             onClick        = onNavigateToSetup,
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                         ) {
-                            Text("Fix", fontWeight = FontWeight.Bold, color = Color(0xFFFB923C))
+                            Text(stringResource(R.string.fix), fontWeight = FontWeight.Bold, color = Color(0xFFFB923C))
                         }
                     }
                 }
@@ -329,7 +329,7 @@ fun MainScreen(
             BatteryStatusCard(level = batteryLevel, isCharging = isCharging)
 
             Text(
-                text     = "Alarms",
+                text     = stringResource(R.string.alarms),
                 style    = MaterialTheme.typography.labelLarge,
                 color    = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp)
@@ -340,10 +340,10 @@ fun MainScreen(
             val lowAccent = if (isDark) Color(0xFFFB923C) else Color(0xFFC2410C)
 
             AlarmCard(
-                title          = "Max Battery Alarm",
-                description    = "Alert when battery is full while charging",
+                title          = stringResource(R.string.max_battery_alarm),
+                description    = stringResource(R.string.max_battery_alarm_description),
                 icon           = Icons.Default.BatteryChargingFull,
-                thresholdLabel = "$maxTarget% threshold",
+                thresholdLabel = stringResource(R.string.threshold_label, maxTarget),
                 isEnabled      = maxEnabled,
                 accentColor    = maxAccent,
                 onToggle       = { newState ->
@@ -362,10 +362,10 @@ fun MainScreen(
             )
 
             AlarmCard(
-                title          = "Low Battery Alarm",
-                description    = "Alert when battery drops below threshold",
+                title          = stringResource(R.string.low_battery_alarm),
+                description    = stringResource(R.string.low_battery_alarm_description),
                 icon           = Icons.Default.BatteryAlert,
-                thresholdLabel = "$lowTarget% threshold",
+                thresholdLabel = stringResource(R.string.threshold_label, lowTarget),
                 isEnabled      = lowEnabled,
                 accentColor    = lowAccent,
                 onToggle       = { newState ->
@@ -395,7 +395,7 @@ fun MainScreen(
             ) {
                 Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Configure Alarm Settings", fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.configure_alarm_settings), fontWeight = FontWeight.Medium)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -500,14 +500,14 @@ private fun PreviewAlarmButton(isPlaying: Boolean, onClick: () -> Unit) {
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text       = if (isPlaying) "Preview Playing…" else "Preview Alarm",
+                        text       = if (isPlaying) stringResource(R.string.preview_playing) else stringResource(R.string.preview_alarm),
                         fontWeight = FontWeight.SemiBold,
                         fontSize   = 16.sp,
                         color      = if (isPlaying) Color.White else MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text  = if (isPlaying) "Tap to stop · auto-stops in 5s" else "Test how your alarm will sound",
+                        text  = if (isPlaying) stringResource(R.string.tap_to_stop_preview) else stringResource(R.string.test_alarm_sound),
                         fontSize = 12.sp,
                         color = if (isPlaying)
                             Color.White.copy(alpha = 0.75f)
@@ -559,14 +559,14 @@ private fun PreviewAlarmSheetContent(
         Spacer(Modifier.height(20.dp))
 
         Text(
-            text       = "Preview Alarm",
+            text       = stringResource(R.string.preview_alarm),
             fontWeight = FontWeight.Bold,
             fontSize   = 20.sp,
             color      = MaterialTheme.colorScheme.onSurface
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text       = "Choose which alarm you want to preview.\nPlays for 5 seconds using your saved settings.",
+            text       = stringResource(R.string.choose_alarm_preview) + "\n" + stringResource(R.string.preview_instructions),
             fontSize   = 13.sp,
             color      = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 19.sp,
@@ -576,8 +576,8 @@ private fun PreviewAlarmSheetContent(
         Spacer(Modifier.height(24.dp))
 
         PreviewOptionCard(
-            title       = "Max Battery Alarm",
-            description = "Fires when battery hits the charge threshold",
+            title       = stringResource(R.string.max_battery_alarm),
+            description = stringResource(R.string.preview_charge_description),
             icon        = Icons.Default.BatteryChargingFull,
             accentColor = Color(0xFF4ADE80),
             isActive    = previewingType == PreviewAlarmType.MAX,
@@ -587,8 +587,8 @@ private fun PreviewAlarmSheetContent(
         Spacer(Modifier.height(12.dp))
 
         PreviewOptionCard(
-            title       = "Low Battery Alarm",
-            description = "Fires when battery drops below threshold",
+            title       = stringResource(R.string.low_battery_alarm),
+            description = stringResource(R.string.preview_low_description),
             icon        = Icons.Default.BatteryAlert,
             accentColor = Color(0xFFFB923C),
             isActive    = previewingType == PreviewAlarmType.LOW,
@@ -613,7 +613,7 @@ private fun PreviewAlarmSheetContent(
                 ) {
                     Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Stop Preview", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Text(stringResource(R.string.stop_preview), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 }
             }
         }
@@ -715,7 +715,7 @@ private fun PreviewOptionCard(
             } else {
                 Icon(
                     Icons.Default.PlayArrow,
-                    contentDescription = "Play",
+                    contentDescription = stringResource(R.string.play),
                     tint     = accentColor.copy(alpha = 0.7f),
                     modifier = Modifier.size(22.dp)
                 )
@@ -778,7 +778,7 @@ private fun BatteryStatusCard(level: Int, isCharging: Boolean) {
                         color      = batteryColor
                     )
                     Text(
-                        text     = if (isCharging) "Charging" else "Not Charging",
+                        text     = if (isCharging) stringResource(R.string.charging) else stringResource(R.string.not_charging),
                         fontSize = 14.sp,
                         color    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
