@@ -14,12 +14,14 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -50,10 +52,17 @@ class BatteryService : Service() {
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var alarmPlayer: AlarmPlayer
 
-    // Both flags are only ever touched on the main thread.
+    // These flags and session fields are only touched on the main thread.
+    // The service deliberately permits only one active alarm/player session.
     private var isMaxAlarmPlaying = false
     private var isLowAlarmPlaying = false
     private var isMonitoring = false
+    private var alarmSessionGeneration = 0L
+
+    // A failed alarm is suppressed until its trigger condition clears. This
+    // prevents repeated failures on every battery broadcast while the same
+    // threshold remains continuously satisfied.
+    private var suppressedAlarmType: String? = null
 
     // In-memory preference cache used by the battery receiver.
     private var maxEnabled = false
@@ -77,16 +86,16 @@ class BatteryService : Service() {
 
             if (level == -1 || scale == -1 || scale <= 0) return
 
-            val pct = (level * 100) / scale
-            val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+            val percentage = (level * 100) / scale
+            val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
                 status == BatteryManager.BATTERY_STATUS_FULL
 
-            lastBatteryLevel = pct
-            lastIsCharging = isCharging
+            lastBatteryLevel = percentage
+            lastIsCharging = charging
 
             // Do not evaluate against placeholder defaults before DataStore is ready.
             if (preferencesLoaded) {
-                checkBatteryLevel(pct, isCharging)
+                checkBatteryLevel(percentage, charging)
             }
         }
     }
@@ -98,8 +107,8 @@ class BatteryService : Service() {
         createNotificationChannels()
 
         // Keep alarm flags and thresholds synchronized with DataStore.
-        // Refresh the notification and re-evaluate the latest battery state
-        // whenever the stored alarm settings change.
+        // Refresh the ongoing notification and re-evaluate the latest battery
+        // state whenever the saved alarm settings change.
         serviceScope.launch {
             combine(
                 preferencesManager.alarmEnabledFlow,
@@ -114,7 +123,7 @@ class BatteryService : Service() {
             }.collect {
                 preferencesLoaded = true
 
-                // Silence an alarm immediately if its corresponding switch is disabled.
+                // Stop the current alarm immediately if its own switch is disabled.
                 if (!maxEnabled && isMaxAlarmPlaying) stopMaxAlarm()
                 if (!lowEnabled && isLowAlarmPlaying) stopLowAlarm()
 
@@ -146,7 +155,6 @@ class BatteryService : Service() {
                         try {
                             preferencesManager.setMonitoringEnabled(true)
                             isMonitoring = true
-                            // Refresh after the setting is saved and the preference cache updates.
                             startForeground(SERVICE_NOTIF_ID, createServiceNotification())
                         } catch (exception: Exception) {
                             Log.e(TAG, "Unable to save monitoring state while starting.", exception)
@@ -161,7 +169,7 @@ class BatteryService : Service() {
             // Alarm preferences are intentionally preserved.
             ACTION_STOP_SERVICE -> {
                 // The stop action can be delivered to a newly-created service instance.
-                // Enter foreground immediately before performing asynchronous DataStore work.
+                // Enter foreground immediately before asynchronous DataStore work.
                 if (!isMonitoring) {
                     isMonitoring = true
                     startForeground(SERVICE_NOTIF_ID, createServiceNotification())
@@ -187,8 +195,8 @@ class BatteryService : Service() {
             }
         }
 
-        // Normal start or system sticky restart. Start foreground immediately to meet
-        // Android's deadline, then verify that the saved master switch is still enabled.
+        // Normal start or system sticky restart. Start foreground immediately to
+        // meet Android's deadline, then verify that the saved master switch is on.
         isMonitoring = true
         startForeground(SERVICE_NOTIF_ID, createServiceNotification())
         serviceScope.launch {
@@ -203,93 +211,188 @@ class BatteryService : Service() {
         return START_STICKY
     }
 
-    // Evaluates the current battery state against stored thresholds.
-    // Alarm startup and cancellation stay on the service's main-thread scope so
-    // a stop request cannot race a background player.start() call.
+    /**
+     * Selects the one alarm whose trigger condition currently applies.
+     * If the desired type changes, the previous playback is invalidated and
+     * stopped before the replacement alarm is allowed to start.
+     */
     private fun checkBatteryLevel(currentLevel: Int, isCharging: Boolean) {
-        if (maxEnabled && isCharging && currentLevel >= maxTarget) {
-            if (!isMaxAlarmPlaying) {
-                isMaxAlarmPlaying = true
-                maxAlarmStartJob = serviceScope.launch {
-                    startAlarm(ALARM_TYPE_MAX)
-                }
-            }
-        } else if (isMaxAlarmPlaying) {
-            stopMaxAlarm()
+        val desiredAlarmType = when {
+            maxEnabled && isCharging && currentLevel >= maxTarget -> ALARM_TYPE_MAX
+            lowEnabled && !isCharging && currentLevel <= lowTarget -> ALARM_TYPE_LOW
+            else -> null
         }
 
-        if (lowEnabled && !isCharging && currentLevel <= lowTarget) {
-            if (!isLowAlarmPlaying) {
-                isLowAlarmPlaying = true
-                lowAlarmStartJob = serviceScope.launch {
-                    startAlarm(ALARM_TYPE_LOW)
+        // A failure is latched only while that same trigger condition remains true.
+        if (suppressedAlarmType != null && desiredAlarmType != suppressedAlarmType) {
+            suppressedAlarmType = null
+        }
+
+        val currentAlarmType = getActiveAlarmType()
+        if (desiredAlarmType == currentAlarmType) return
+
+        // Stop and invalidate the old request before creating a new request.
+        if (currentAlarmType != null || maxAlarmStartJob != null || lowAlarmStartJob != null) {
+            stopAllAlarms()
+        }
+
+        if (desiredAlarmType == null || desiredAlarmType == suppressedAlarmType) return
+        beginAlarmSession(desiredAlarmType)
+    }
+
+    private fun getActiveAlarmType(): String? = when {
+        isMaxAlarmPlaying -> ALARM_TYPE_MAX
+        isLowAlarmPlaying -> ALARM_TYPE_LOW
+        else -> null
+    }
+
+    private fun beginAlarmSession(type: String) {
+        // There must not be a previous playback session when a new one begins.
+        alarmPlayer.stop()
+        val sessionId = ++alarmSessionGeneration
+
+        when (type) {
+            ALARM_TYPE_MAX -> {
+                isMaxAlarmPlaying = true
+                isLowAlarmPlaying = false
+                maxAlarmStartJob = serviceScope.launch {
+                    runAlarmStartSafely(type, sessionId)
                 }
+                lowAlarmStartJob = null
             }
-        } else if (isLowAlarmPlaying) {
-            stopLowAlarm()
+
+            ALARM_TYPE_LOW -> {
+                isLowAlarmPlaying = true
+                isMaxAlarmPlaying = false
+                lowAlarmStartJob = serviceScope.launch {
+                    runAlarmStartSafely(type, sessionId)
+                }
+                maxAlarmStartJob = null
+            }
         }
     }
 
-    // Read the latest preferences, re-check the alarm state, then start playback.
-    // The final check and player call run without a suspension between them.
-    private suspend fun startAlarm(type: String) {
+    private suspend fun runAlarmStartSafely(type: String, sessionId: Long) {
+        try {
+            startAlarm(type, sessionId)
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            handleAlarmPlaybackFailure(
+                type,
+                sessionId,
+                "Unable to load alarm settings or start playback: ${exception.message ?: exception.javaClass.simpleName}"
+            )
+        }
+    }
+
+    private fun isCurrentAlarmSession(type: String, sessionId: Long): Boolean {
+        if (sessionId != alarmSessionGeneration) return false
+        return when (type) {
+            ALARM_TYPE_MAX -> isMaxAlarmPlaying && !isLowAlarmPlaying
+            ALARM_TYPE_LOW -> isLowAlarmPlaying && !isMaxAlarmPlaying
+            else -> false
+        }
+    }
+
+    /** Reads current preferences, verifies the session, and starts its player. */
+    private suspend fun startAlarm(type: String, sessionId: Long) {
+        val soundType: String
+        val ttsText: String
+        val vibration: Boolean
+        val volume: Int
+        val ringtoneUri: String?
+
         when (type) {
             ALARM_TYPE_MAX -> {
-                if (!isMaxAlarmPlaying || !preferencesManager.alarmEnabledFlow.first()) {
-                    return
-                }
+                if (!isCurrentAlarmSession(type, sessionId) ||
+                    !preferencesManager.alarmEnabledFlow.first()
+                ) return
 
-                val soundType = preferencesManager.maxSoundTypeFlow.first()
-                val ttsText = preferencesManager.maxTtsTextFlow.first()
-                val vibration = preferencesManager.vibrationEnabledFlow.first()
-                val volume = preferencesManager.alarmVolumeFlow.first()
-                val ringtoneUri = if (soundType == "tts") {
+                soundType = preferencesManager.maxSoundTypeFlow.first()
+                ttsText = preferencesManager.maxTtsTextFlow.first()
+                vibration = preferencesManager.vibrationEnabledFlow.first()
+                volume = preferencesManager.alarmVolumeFlow.first()
+                ringtoneUri = if (soundType == "tts") {
                     null
                 } else {
                     preferencesManager.ringtoneUriFlow.first()
                 }
 
-                if (!isMaxAlarmPlaying || !preferencesManager.alarmEnabledFlow.first()) {
-                    return
-                }
-
-                if (soundType == "tts") {
-                    alarmPlayer.playTts(ttsText, vibration, volume)
-                } else {
-                    alarmPlayer.play(ringtoneUri, vibration, volume)
-                }
+                if (!isCurrentAlarmSession(type, sessionId) ||
+                    !preferencesManager.alarmEnabledFlow.first()
+                ) return
             }
 
             ALARM_TYPE_LOW -> {
-                if (!isLowAlarmPlaying || !preferencesManager.lowAlarmEnabledFlow.first()) {
-                    return
-                }
+                if (!isCurrentAlarmSession(type, sessionId) ||
+                    !preferencesManager.lowAlarmEnabledFlow.first()
+                ) return
 
-                val soundType = preferencesManager.lowSoundTypeFlow.first()
-                val ttsText = preferencesManager.lowTtsTextFlow.first()
-                val vibration = preferencesManager.lowVibrationEnabledFlow.first()
-                val volume = preferencesManager.lowAlarmVolumeFlow.first()
-                val ringtoneUri = if (soundType == "tts") {
+                soundType = preferencesManager.lowSoundTypeFlow.first()
+                ttsText = preferencesManager.lowTtsTextFlow.first()
+                vibration = preferencesManager.lowVibrationEnabledFlow.first()
+                volume = preferencesManager.lowAlarmVolumeFlow.first()
+                ringtoneUri = if (soundType == "tts") {
                     null
                 } else {
                     preferencesManager.lowRingtoneUriFlow.first()
                 }
 
-                if (!isLowAlarmPlaying || !preferencesManager.lowAlarmEnabledFlow.first()) {
-                    return
-                }
-
-                if (soundType == "tts") {
-                    alarmPlayer.playTts(ttsText, vibration, volume)
-                } else {
-                    alarmPlayer.play(ringtoneUri, vibration, volume)
-                }
+                if (!isCurrentAlarmSession(type, sessionId) ||
+                    !preferencesManager.lowAlarmEnabledFlow.first()
+                ) return
             }
 
             else -> return
         }
 
-        showAlarmNotification(type)
+        // These callbacks carry the immutable session ID. A late callback from
+        // a previous alarm cannot publish a notification or clear a newer alarm.
+        val onPlaybackStarted: () -> Unit = {
+            if (isCurrentAlarmSession(type, sessionId)) {
+                when (type) {
+                    ALARM_TYPE_MAX -> maxAlarmStartJob = null
+                    ALARM_TYPE_LOW -> lowAlarmStartJob = null
+                }
+                showAlarmNotification(type)
+            }
+        }
+
+        val onPlaybackError: (String) -> Unit = { message ->
+            handleAlarmPlaybackFailure(type, sessionId, message)
+        }
+
+        if (soundType == "tts") {
+            alarmPlayer.playTts(
+                text = ttsText,
+                enableVibration = vibration,
+                volumePercent = volume,
+                onPlaybackStarted = onPlaybackStarted,
+                onPlaybackError = onPlaybackError
+            )
+        } else {
+            alarmPlayer.play(
+                ringtoneUriString = ringtoneUri,
+                enableVibration = vibration,
+                volumePercent = volume,
+                onPlaybackStarted = onPlaybackStarted,
+                onPlaybackError = onPlaybackError
+            )
+        }
+    }
+
+    /** Handles one failed session without disturbing a newer session. */
+    private fun handleAlarmPlaybackFailure(type: String, sessionId: Long, message: String) {
+        if (!isCurrentAlarmSession(type, sessionId)) return
+
+        Log.e(TAG, "Alarm playback failed (type=$type, session=$sessionId): $message")
+        suppressedAlarmType = type
+
+        // The player has already released its failed media/TTS object. stop() is
+        // still used to invalidate any late callback and guarantee shared cleanup;
+        // it does not report an error for an intentional stop.
+        stopAllAlarms()
     }
 
     private fun showAlarmNotification(type: String) {
@@ -298,11 +401,14 @@ class BatteryService : Service() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
         val fullScreenPending = PendingIntent.getActivity(
-            this, 3, alarmIntent,
+            this,
+            3,
+            alarmIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val stopPending = PendingIntent.getService(
-            this, 4,
+            this,
+            4,
             Intent(this, BatteryService::class.java).apply { action = ACTION_STOP_ALARM },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
@@ -332,39 +438,24 @@ class BatteryService : Service() {
             .setOngoing(true)
             .build()
 
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(ALARM_NOTIF_ID, notification)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(ALARM_NOTIF_ID, notification)
     }
 
     private fun stopMaxAlarm() {
         if (!isMaxAlarmPlaying && maxAlarmStartJob == null) return
-
-        isMaxAlarmPlaying = false
-        maxAlarmStartJob?.cancel()
-        maxAlarmStartJob = null
-
-        if (!isLowAlarmPlaying) {
-            alarmPlayer.stop()
-            cancelAlarmNotification()
-        }
-        broadcastAlarmStopped()
+        stopAllAlarms()
     }
 
     private fun stopLowAlarm() {
         if (!isLowAlarmPlaying && lowAlarmStartJob == null) return
-
-        isLowAlarmPlaying = false
-        lowAlarmStartJob?.cancel()
-        lowAlarmStartJob = null
-
-        if (!isMaxAlarmPlaying) {
-            alarmPlayer.stop()
-            cancelAlarmNotification()
-        }
-        broadcastAlarmStopped()
+        stopAllAlarms()
     }
 
     fun stopAllAlarms() {
+        // Invalidate callbacks before cancelling jobs or releasing the player.
+        alarmSessionGeneration++
+
         maxAlarmStartJob?.cancel()
         maxAlarmStartJob = null
         lowAlarmStartJob?.cancel()
@@ -378,8 +469,8 @@ class BatteryService : Service() {
     }
 
     private fun cancelAlarmNotification() {
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.cancel(ALARM_NOTIF_ID)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(ALARM_NOTIF_ID)
         updateServiceNotification()
     }
 
@@ -389,6 +480,9 @@ class BatteryService : Service() {
 
     /** Stops monitoring and removes its foreground notification without changing alarm settings. */
     private fun stopMonitoringService(startId: Int) {
+        alarmSessionGeneration++
+        suppressedAlarmType = null
+
         maxAlarmStartJob?.cancel()
         maxAlarmStartJob = null
         lowAlarmStartJob?.cancel()
@@ -399,8 +493,8 @@ class BatteryService : Service() {
         alarmPlayer.stop()
         isMonitoring = false
 
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.cancel(ALARM_NOTIF_ID)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(ALARM_NOTIF_ID)
         stopForeground(STOP_FOREGROUND_REMOVE)
         broadcastAlarmStopped()
         stopSelf(startId)
@@ -408,12 +502,14 @@ class BatteryService : Service() {
 
     private fun createServiceNotification(): Notification {
         val openIntent = PendingIntent.getActivity(
-            this, 0,
+            this,
+            0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val stopIntent = PendingIntent.getService(
-            this, 2,
+            this,
+            2,
             Intent(this, BatteryService::class.java).apply { action = ACTION_STOP_SERVICE },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
@@ -443,22 +539,26 @@ class BatteryService : Service() {
 
     private fun updateServiceNotification() {
         if (!isMonitoring) return
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(SERVICE_NOTIF_ID, createServiceNotification())
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(SERVICE_NOTIF_ID, createServiceNotification())
     }
 
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(NotificationManager::class.java)
+            val notificationManager = getSystemService(NotificationManager::class.java)
 
             val serviceChannel = NotificationChannel(
-                SERVICE_CHANNEL_ID, getString(R.string.battery_monitoring_channel), NotificationManager.IMPORTANCE_LOW
+                SERVICE_CHANNEL_ID,
+                getString(R.string.battery_monitoring_channel),
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = getString(R.string.battery_monitoring_channel_description)
             }
 
             val alarmChannel = NotificationChannel(
-                ALARM_CHANNEL_ID, getString(R.string.battery_alarm_channel), NotificationManager.IMPORTANCE_HIGH
+                ALARM_CHANNEL_ID,
+                getString(R.string.battery_alarm_channel),
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = getString(R.string.battery_alarm_channel_description)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
@@ -466,14 +566,15 @@ class BatteryService : Service() {
                 setBypassDnd(true)
             }
 
-            nm.createNotificationChannel(serviceChannel)
-            nm.createNotificationChannel(alarmChannel)
+            notificationManager.createNotificationChannel(serviceChannel)
+            notificationManager.createNotificationChannel(alarmChannel)
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         isMonitoring = false
+        alarmSessionGeneration++
         try {
             unregisterReceiver(batteryReceiver)
         } catch (_: Exception) {
