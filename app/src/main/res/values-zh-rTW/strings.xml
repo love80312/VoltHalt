@@ -89,7 +89,7 @@
     <string name="alarm_popup_description">警報觸發時，允許 VoltHalt 在鎖定畫面上顯示全螢幕提醒。若未授予此權限，警報只會以通知方式顯示。</string>
     <string name="allow_popups">允許彈出視窗</string>
     <string name="quick_settings_tile">快速設定磁貼</string>
-    <string name="quick_settings_tile_description">在下拉式快速設定面板加入開關，方便快速啟用或停用警報。</string>
+    <string name="quick_settings_tile_description">在下拉式快速設定面板加入開關，方便隨時啟動或停止電池監控。</string>
     <string name="add_tile">新增磁貼</string>
     <string name="finish_setup">完成設定</string>
     <string name="completed">已完成</string>
