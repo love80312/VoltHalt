@@ -60,6 +60,12 @@ class BatteryService : Service() {
     private var maxTarget = 80
     private var lowEnabled = false
     private var lowTarget = 20
+    private var preferencesLoaded = false
+
+    // Cache the latest sticky battery state so the first DataStore emission can
+    // evaluate it after the real alarm settings have replaced the defaults.
+    private var lastBatteryLevel: Int? = null
+    private var lastIsCharging: Boolean? = null
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -69,13 +75,19 @@ class BatteryService : Service() {
             val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
             val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
 
-            if (level == -1 || scale == -1) return
+            if (level == -1 || scale == -1 || scale <= 0) return
 
             val pct = (level * 100) / scale
             val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
                 status == BatteryManager.BATTERY_STATUS_FULL
 
-            checkBatteryLevel(pct, isCharging)
+            lastBatteryLevel = pct
+            lastIsCharging = isCharging
+
+            // Do not evaluate against placeholder defaults before DataStore is ready.
+            if (preferencesLoaded) {
+                checkBatteryLevel(pct, isCharging)
+            }
         }
     }
 
@@ -86,7 +98,8 @@ class BatteryService : Service() {
         createNotificationChannels()
 
         // Keep alarm flags and thresholds synchronized with DataStore.
-        // Refresh the ongoing notification whenever either alarm setting changes.
+        // Refresh the notification and re-evaluate the latest battery state
+        // whenever the stored alarm settings change.
         serviceScope.launch {
             combine(
                 preferencesManager.alarmEnabledFlow,
@@ -99,10 +112,21 @@ class BatteryService : Service() {
                 lowEnabled = lowActive
                 lowTarget = lowLevel
             }.collect {
+                preferencesLoaded = true
+
                 // Silence an alarm immediately if its corresponding switch is disabled.
                 if (!maxEnabled && isMaxAlarmPlaying) stopMaxAlarm()
                 if (!lowEnabled && isLowAlarmPlaying) stopLowAlarm()
+
                 updateServiceNotification()
+
+                // ACTION_BATTERY_CHANGED is sticky and may arrive before DataStore
+                // finishes loading. Re-check it now that the saved thresholds exist.
+                val currentLevel = lastBatteryLevel
+                val currentCharging = lastIsCharging
+                if (currentLevel != null && currentCharging != null) {
+                    checkBatteryLevel(currentLevel, currentCharging)
+                }
             }
         }
 

@@ -141,57 +141,119 @@ class AlarmPlayer(private val context: Context) {
         val generation = ++playbackGeneration
         ttsActive = true
 
-        applyAlarmStreamVolume(volumePercent)
-        if (enableVibration) startVibration()
+        try {
+            applyAlarmStreamVolume(volumePercent)
+            if (enableVibration) startVibration()
 
-        tts = TextToSpeech(context) { status ->
-            // A delayed callback from an earlier TTS instance must not start
-            // speech after stop() or after a newer playback session begins.
-            if (generation != playbackGeneration || !ttsActive) return@TextToSpeech
+            tts = TextToSpeech(context) { status ->
+                // A delayed callback from an earlier TTS instance must not start
+                // speech after stop() or after a newer playback session begins.
+                if (generation != playbackGeneration || !ttsActive) return@TextToSpeech
 
-            if (status != TextToSpeech.SUCCESS) {
-                tts?.shutdown()
-                tts = null
-                restoreStreamVolume()
-                return@TextToSpeech
-            }
-
-            val engine = tts ?: return@TextToSpeech
-
-            val result = engine.setLanguage(Locale.getDefault())
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                engine.setLanguage(Locale.ENGLISH)
-            }
-
-            // Route through the alarm stream so it plays in silent/DND mode.
-            engine.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-            )
-
-            // After each utterance finishes, wait the gap then speak again.
-            engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {}
-
-                override fun onDone(utteranceId: String?) {
-                    if (!ttsActive || generation != playbackGeneration) return
-                    ttsScope?.launch {
-                        delay(TTS_REPEAT_GAP_MS)
-                        if (ttsActive && generation == playbackGeneration) {
-                            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, buildTtsBundle(), TTS_UTTERANCE_ID)
-                        }
-                    }
+                if (status != TextToSpeech.SUCCESS) {
+                    finishTtsSession(generation, tts)
+                    return@TextToSpeech
                 }
 
-                @Deprecated("Deprecated in API 21")
-                override fun onError(utteranceId: String?) {}
-            })
+                val engine = tts ?: run {
+                    finishTtsSession(generation, null)
+                    return@TextToSpeech
+                }
 
-            ttsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-            engine.speak(text, TextToSpeech.QUEUE_FLUSH, buildTtsBundle(), TTS_UTTERANCE_ID)
+                try {
+                    val languageResult = engine.setLanguage(Locale.getDefault())
+                    if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
+                        languageResult == TextToSpeech.LANG_NOT_SUPPORTED
+                    ) {
+                        engine.setLanguage(Locale.ENGLISH)
+                    }
+
+                    // Route through the alarm stream so it plays in silent/DND mode.
+                    engine.setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+
+                    // After each utterance finishes, wait the gap then speak again.
+                    engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                        override fun onStart(utteranceId: String?) {}
+
+                        override fun onDone(utteranceId: String?) {
+                            if (!ttsActive || generation != playbackGeneration) return
+                            ttsScope?.launch {
+                                delay(TTS_REPEAT_GAP_MS)
+                                if (ttsActive && generation == playbackGeneration) {
+                                    val currentEngine = tts ?: return@launch
+                                    val result = currentEngine.speak(
+                                        text,
+                                        TextToSpeech.QUEUE_FLUSH,
+                                        buildTtsBundle(),
+                                        TTS_UTTERANCE_ID
+                                    )
+                                    if (result == TextToSpeech.ERROR) {
+                                        finishTtsSession(generation, currentEngine)
+                                    }
+                                }
+                            }
+                        }
+
+                        @Deprecated("Deprecated in API 21")
+                        override fun onError(utteranceId: String?) {
+                            finishTtsSession(generation, engine)
+                        }
+
+                        override fun onError(utteranceId: String?, errorCode: Int) {
+                            finishTtsSession(generation, engine)
+                        }
+                    })
+
+                    ttsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+                    val result = engine.speak(
+                        text,
+                        TextToSpeech.QUEUE_FLUSH,
+                        buildTtsBundle(),
+                        TTS_UTTERANCE_ID
+                    )
+                    if (result == TextToSpeech.ERROR) {
+                        finishTtsSession(generation, engine)
+                    }
+                } catch (exception: Exception) {
+                    exception.printStackTrace()
+                    finishTtsSession(generation, engine)
+                }
+            }
+        } catch (exception: Exception) {
+            exception.printStackTrace()
+            finishTtsSession(generation, tts)
         }
+    }
+
+    /** Clears a failed TTS session without allowing stale callbacks to affect a newer one. */
+    private fun finishTtsSession(generation: Long, expectedEngine: TextToSpeech?) {
+        if (generation != playbackGeneration || !ttsActive) return
+        if (expectedEngine != null && tts !== expectedEngine) return
+
+        ttsActive = false
+        ttsScope?.cancel()
+        ttsScope = null
+
+        val engine = tts
+        tts = null
+        try {
+            engine?.stop()
+        } catch (_: Exception) {
+            // Ignore errors while shutting down a failed TTS session.
+        }
+        try {
+            engine?.shutdown()
+        } catch (_: Exception) {
+            // Ignore errors while shutting down a failed TTS session.
+        }
+
+        vibrator?.cancel()
+        restoreStreamVolume()
     }
 
     fun stop() {
@@ -209,8 +271,14 @@ class AlarmPlayer(private val context: Context) {
         ttsScope?.cancel()
         ttsScope = null
         tts?.let {
-            it.stop()
-            it.shutdown()
+            try {
+                it.stop()
+            } catch (_: Exception) {
+            }
+            try {
+                it.shutdown()
+            } catch (_: Exception) {
+            }
         }
         tts = null
 
@@ -221,17 +289,34 @@ class AlarmPlayer(private val context: Context) {
     private fun applyAlarmStreamVolume(volumePercent: Int) {
         val clamped = volumePercent.coerceIn(0, 100)
         audioManager?.let { am ->
-            val max = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
-            savedAlarmStreamVolume = am.getStreamVolume(AudioManager.STREAM_ALARM)
-            val target = ((clamped / 100f) * max).toInt().coerceIn(0, max)
-            am.setStreamVolume(AudioManager.STREAM_ALARM, target, 0)
+            try {
+                val max = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+                savedAlarmStreamVolume = am.getStreamVolume(AudioManager.STREAM_ALARM)
+                val target = ((clamped / 100f) * max).toInt().coerceIn(0, max)
+                am.setStreamVolume(AudioManager.STREAM_ALARM, target, 0)
+            } catch (exception: SecurityException) {
+                // A device may reject a stream-volume change. Keep playback available
+                // at the current system volume rather than aborting the alarm.
+                exception.printStackTrace()
+                savedAlarmStreamVolume = -1
+            }
         }
     }
 
     private fun restoreStreamVolume() {
         if (savedAlarmStreamVolume >= 0) {
-            audioManager?.setStreamVolume(AudioManager.STREAM_ALARM, savedAlarmStreamVolume, 0)
-            savedAlarmStreamVolume = -1
+            try {
+                audioManager?.setStreamVolume(
+                    AudioManager.STREAM_ALARM,
+                    savedAlarmStreamVolume,
+                    0
+                )
+            } catch (exception: SecurityException) {
+                // The system may reject restoration; do not keep a stale saved value.
+                exception.printStackTrace()
+            } finally {
+                savedAlarmStreamVolume = -1
+            }
         }
     }
 
