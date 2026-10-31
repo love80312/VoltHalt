@@ -113,8 +113,11 @@
     <string name="notification_low_battery_title">🪫 Low Battery Warning!</string>
     <string name="notification_max_battery_message">Battery has hit your target. Unplug now.</string>
     <string name="notification_low_battery_message">Battery is critically low. Please charge.</string>
-    <string name="tile_alarm_on">Alarm On</string>
-    <string name="tile_alarm_off">Alarm Off</string>
+    <string name="alarm_status_enabled">On</string>
+    <string name="alarm_status_disabled">Off</string>
+    <string name="alarm_status_format">Max %1$d%%: %2$s · Low %3$d%%: %4$s</string>
+    <string name="tile_alarm_on">Max Alarm On</string>
+    <string name="tile_alarm_off">Max Alarm Off</string>
     <string name="tile_monitoring">Monitoring</string>
     <string name="tile_disabled">Disabled</string>
 
