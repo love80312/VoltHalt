@@ -58,7 +58,9 @@ import androidx.core.content.FileProvider
 import com.im_atp.volthalt.AlarmPlayer
 import com.im_atp.volthalt.PreferencesManager
 import com.im_atp.volthalt.R
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -127,6 +129,14 @@ private suspend fun shareApk(context: Context) = withContext(Dispatchers.IO) {
 
 private enum class PreviewAlarmType { MAX, LOW }
 
+private data class PreviewSoundSettings(
+    val soundType: String,
+    val ttsText: String,
+    val vibration: Boolean,
+    val volume: Int,
+    val ringtoneUri: String?
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -157,45 +167,83 @@ fun MainScreen(
 
     var showPreviewSheet by remember { mutableStateOf(false) }
     var previewingType   by remember { mutableStateOf<PreviewAlarmType?>(null) }
+    var previewJob       by remember { mutableStateOf<Job?>(null) }
+    var previewSessionId by remember { mutableIntStateOf(0) }
     val previewPlayer    = remember { AlarmPlayer(context) }
 
-    DisposableEffect(Unit) {
-        onDispose { previewPlayer.stop() }
+    DisposableEffect(previewPlayer) {
+        onDispose {
+            previewSessionId++
+            previewJob?.cancel()
+            previewPlayer.stop()
+        }
     }
 
     fun startPreview(type: PreviewAlarmType) {
-        previewingType = type
-        coroutineScope.launch(Dispatchers.IO) {
-            if (type == PreviewAlarmType.MAX) {
-                val soundType   = preferencesManager.maxSoundTypeFlow.first()
-                val vibration   = preferencesManager.vibrationEnabledFlow.first()
-                val volume      = preferencesManager.alarmVolumeFlow.first()
-                if (soundType == "tts") {
-                    previewPlayer.playTts(preferencesManager.maxTtsTextFlow.first(), vibration, volume)
-                } else {
-                    previewPlayer.play(preferencesManager.ringtoneUriFlow.first(), vibration, volume)
-                }
-            } else {
-                val soundType   = preferencesManager.lowSoundTypeFlow.first()
-                val vibration   = preferencesManager.lowVibrationEnabledFlow.first()
-                val volume      = preferencesManager.lowAlarmVolumeFlow.first()
-                if (soundType == "tts") {
-                    previewPlayer.playTts(preferencesManager.lowTtsTextFlow.first(), vibration, volume)
-                } else {
-                    previewPlayer.play(preferencesManager.lowRingtoneUriFlow.first(), vibration, volume)
-                }
-            }
+        // Each preview gets an ID so an older cancelled coroutine cannot stop
+        // or reset a newer preview session.
+        previewSessionId++
+        val sessionId = previewSessionId
 
-            delay(5000L)
-            previewPlayer.stop()
-            withContext(Dispatchers.Main) {
-                previewingType   = null
-                showPreviewSheet = false
+        previewJob?.cancel()
+        previewPlayer.stop()
+        previewingType = type
+
+        previewJob = coroutineScope.launch {
+            try {
+                // DataStore reads may run on IO, but all player operations stay on Main.
+                val settings = withContext(Dispatchers.IO) {
+                    if (type == PreviewAlarmType.MAX) {
+                        val soundType = preferencesManager.maxSoundTypeFlow.first()
+                        PreviewSoundSettings(
+                            soundType = soundType,
+                            ttsText = preferencesManager.maxTtsTextFlow.first(),
+                            vibration = preferencesManager.vibrationEnabledFlow.first(),
+                            volume = preferencesManager.alarmVolumeFlow.first(),
+                            ringtoneUri = if (soundType == "tts") null else preferencesManager.ringtoneUriFlow.first()
+                        )
+                    } else {
+                        val soundType = preferencesManager.lowSoundTypeFlow.first()
+                        PreviewSoundSettings(
+                            soundType = soundType,
+                            ttsText = preferencesManager.lowTtsTextFlow.first(),
+                            vibration = preferencesManager.lowVibrationEnabledFlow.first(),
+                            volume = preferencesManager.lowAlarmVolumeFlow.first(),
+                            ringtoneUri = if (soundType == "tts") null else preferencesManager.lowRingtoneUriFlow.first()
+                        )
+                    }
+                }
+
+                // Ignore this result if the user stopped or replaced the preview
+                // while the preference reads were still in progress.
+                if (previewSessionId != sessionId) return@launch
+
+                if (settings.soundType == "tts") {
+                    previewPlayer.playTts(settings.ttsText, settings.vibration, settings.volume)
+                } else {
+                    previewPlayer.play(settings.ringtoneUri, settings.vibration, settings.volume)
+                }
+
+                delay(5000L)
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                exception.printStackTrace()
+            } finally {
+                if (previewSessionId == sessionId) {
+                    previewPlayer.stop()
+                    previewingType = null
+                    showPreviewSheet = false
+                    previewJob = null
+                }
             }
         }
     }
 
     fun stopPreview() {
+        previewSessionId++
+        previewJob?.cancel()
+        previewJob = null
         previewPlayer.stop()
         previewingType   = null
         showPreviewSheet = false
