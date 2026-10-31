@@ -89,7 +89,7 @@
     <string name="alarm_popup_description">Lets VoltHalt show a full-screen alert over your lock screen when the alarm fires. Without this, the alarm will only show as a notification.</string>
     <string name="allow_popups">Allow Pop-ups</string>
     <string name="quick_settings_tile">Quick Settings Tile</string>
-    <string name="quick_settings_tile_description">Add a convenient toggle to your swipe-down menu for instant access to turn the alarm on or off.</string>
+    <string name="quick_settings_tile_description">Add a convenient toggle to your swipe-down menu to start or stop battery monitoring.</string>
     <string name="add_tile">Add Tile</string>
     <string name="finish_setup">Finish Setup</string>
     <string name="completed">Completed</string>
