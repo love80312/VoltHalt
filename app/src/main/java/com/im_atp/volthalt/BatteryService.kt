@@ -16,6 +16,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
@@ -44,6 +45,8 @@ class BatteryService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val monitoringCommandMutex = Mutex()
+    private var maxAlarmStartJob: Job? = null
+    private var lowAlarmStartJob: Job? = null
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var alarmPlayer: AlarmPlayer
 
@@ -55,12 +58,8 @@ class BatteryService : Service() {
     // In-memory preference cache used by the battery receiver.
     private var maxEnabled = false
     private var maxTarget = 80
-    private var maxSoundType = "ringtone"
-    private var maxTtsText = ""
     private var lowEnabled = false
     private var lowTarget = 20
-    private var lowSoundType = "ringtone"
-    private var lowTtsText = ""
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -85,8 +84,6 @@ class BatteryService : Service() {
         preferencesManager = PreferencesManager(applicationContext)
         alarmPlayer = AlarmPlayer(applicationContext)
         createNotificationChannels()
-        maxTtsText = getString(R.string.default_max_tts)
-        lowTtsText = getString(R.string.default_low_tts)
 
         // Keep alarm flags and thresholds synchronized with DataStore.
         // Refresh the ongoing notification whenever either alarm setting changes.
@@ -108,12 +105,6 @@ class BatteryService : Service() {
                 updateServiceNotification()
             }
         }
-
-        // Cache sound preferences separately for alarm playback.
-        serviceScope.launch { preferencesManager.maxSoundTypeFlow.collect { maxSoundType = it } }
-        serviceScope.launch { preferencesManager.maxTtsTextFlow.collect { maxTtsText = it } }
-        serviceScope.launch { preferencesManager.lowSoundTypeFlow.collect { lowSoundType = it } }
-        serviceScope.launch { preferencesManager.lowTtsTextFlow.collect { lowTtsText = it } }
 
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
     }
@@ -189,12 +180,15 @@ class BatteryService : Service() {
     }
 
     // Evaluates the current battery state against stored thresholds.
-    // Only reads in-memory fields on the battery broadcast path.
+    // Alarm startup and cancellation stay on the service's main-thread scope so
+    // a stop request cannot race a background player.start() call.
     private fun checkBatteryLevel(currentLevel: Int, isCharging: Boolean) {
         if (maxEnabled && isCharging && currentLevel >= maxTarget) {
             if (!isMaxAlarmPlaying) {
                 isMaxAlarmPlaying = true
-                serviceScope.launch(Dispatchers.IO) { startAlarm(ALARM_TYPE_MAX) }
+                maxAlarmStartJob = serviceScope.launch {
+                    startAlarm(ALARM_TYPE_MAX)
+                }
             }
         } else if (isMaxAlarmPlaying) {
             stopMaxAlarm()
@@ -203,34 +197,74 @@ class BatteryService : Service() {
         if (lowEnabled && !isCharging && currentLevel <= lowTarget) {
             if (!isLowAlarmPlaying) {
                 isLowAlarmPlaying = true
-                serviceScope.launch(Dispatchers.IO) { startAlarm(ALARM_TYPE_LOW) }
+                lowAlarmStartJob = serviceScope.launch {
+                    startAlarm(ALARM_TYPE_LOW)
+                }
             }
         } else if (isLowAlarmPlaying) {
             stopLowAlarm()
         }
     }
 
-    // Reads the remaining alarm preferences and hands off to AlarmPlayer.
+    // Read the latest preferences, re-check the alarm state, then start playback.
+    // The final check and player call run without a suspension between them.
     private suspend fun startAlarm(type: String) {
-        if (type == ALARM_TYPE_MAX) {
-            val vibration = preferencesManager.vibrationEnabledFlow.first()
-            val volume = preferencesManager.alarmVolumeFlow.first()
-            if (maxSoundType == "tts") {
-                alarmPlayer.playTts(maxTtsText, vibration, volume)
-            } else {
-                val ringtoneUri = preferencesManager.ringtoneUriFlow.first()
-                alarmPlayer.play(ringtoneUri, vibration, volume)
+        when (type) {
+            ALARM_TYPE_MAX -> {
+                if (!isMaxAlarmPlaying || !preferencesManager.alarmEnabledFlow.first()) {
+                    return
+                }
+
+                val soundType = preferencesManager.maxSoundTypeFlow.first()
+                val ttsText = preferencesManager.maxTtsTextFlow.first()
+                val vibration = preferencesManager.vibrationEnabledFlow.first()
+                val volume = preferencesManager.alarmVolumeFlow.first()
+                val ringtoneUri = if (soundType == "tts") {
+                    null
+                } else {
+                    preferencesManager.ringtoneUriFlow.first()
+                }
+
+                if (!isMaxAlarmPlaying || !preferencesManager.alarmEnabledFlow.first()) {
+                    return
+                }
+
+                if (soundType == "tts") {
+                    alarmPlayer.playTts(ttsText, vibration, volume)
+                } else {
+                    alarmPlayer.play(ringtoneUri, vibration, volume)
+                }
             }
-        } else {
-            val vibration = preferencesManager.lowVibrationEnabledFlow.first()
-            val volume = preferencesManager.lowAlarmVolumeFlow.first()
-            if (lowSoundType == "tts") {
-                alarmPlayer.playTts(lowTtsText, vibration, volume)
-            } else {
-                val ringtoneUri = preferencesManager.lowRingtoneUriFlow.first()
-                alarmPlayer.play(ringtoneUri, vibration, volume)
+
+            ALARM_TYPE_LOW -> {
+                if (!isLowAlarmPlaying || !preferencesManager.lowAlarmEnabledFlow.first()) {
+                    return
+                }
+
+                val soundType = preferencesManager.lowSoundTypeFlow.first()
+                val ttsText = preferencesManager.lowTtsTextFlow.first()
+                val vibration = preferencesManager.lowVibrationEnabledFlow.first()
+                val volume = preferencesManager.lowAlarmVolumeFlow.first()
+                val ringtoneUri = if (soundType == "tts") {
+                    null
+                } else {
+                    preferencesManager.lowRingtoneUriFlow.first()
+                }
+
+                if (!isLowAlarmPlaying || !preferencesManager.lowAlarmEnabledFlow.first()) {
+                    return
+                }
+
+                if (soundType == "tts") {
+                    alarmPlayer.playTts(ttsText, vibration, volume)
+                } else {
+                    alarmPlayer.play(ringtoneUri, vibration, volume)
+                }
             }
+
+            else -> return
         }
+
         showAlarmNotification(type)
     }
 
@@ -279,8 +313,12 @@ class BatteryService : Service() {
     }
 
     private fun stopMaxAlarm() {
-        if (!isMaxAlarmPlaying) return
+        if (!isMaxAlarmPlaying && maxAlarmStartJob == null) return
+
         isMaxAlarmPlaying = false
+        maxAlarmStartJob?.cancel()
+        maxAlarmStartJob = null
+
         if (!isLowAlarmPlaying) {
             alarmPlayer.stop()
             cancelAlarmNotification()
@@ -289,8 +327,12 @@ class BatteryService : Service() {
     }
 
     private fun stopLowAlarm() {
-        if (!isLowAlarmPlaying) return
+        if (!isLowAlarmPlaying && lowAlarmStartJob == null) return
+
         isLowAlarmPlaying = false
+        lowAlarmStartJob?.cancel()
+        lowAlarmStartJob = null
+
         if (!isMaxAlarmPlaying) {
             alarmPlayer.stop()
             cancelAlarmNotification()
@@ -299,6 +341,11 @@ class BatteryService : Service() {
     }
 
     fun stopAllAlarms() {
+        maxAlarmStartJob?.cancel()
+        maxAlarmStartJob = null
+        lowAlarmStartJob?.cancel()
+        lowAlarmStartJob = null
+
         isMaxAlarmPlaying = false
         isLowAlarmPlaying = false
         alarmPlayer.stop()
@@ -318,6 +365,11 @@ class BatteryService : Service() {
 
     /** Stops monitoring and removes its foreground notification without changing alarm settings. */
     private fun stopMonitoringService(startId: Int) {
+        maxAlarmStartJob?.cancel()
+        maxAlarmStartJob = null
+        lowAlarmStartJob?.cancel()
+        lowAlarmStartJob = null
+
         isMaxAlarmPlaying = false
         isLowAlarmPlaying = false
         alarmPlayer.stop()
@@ -402,6 +454,10 @@ class BatteryService : Service() {
             unregisterReceiver(batteryReceiver)
         } catch (_: Exception) {
         }
+        maxAlarmStartJob?.cancel()
+        maxAlarmStartJob = null
+        lowAlarmStartJob?.cancel()
+        lowAlarmStartJob = null
         alarmPlayer.stop()
         serviceScope.cancel()
     }
