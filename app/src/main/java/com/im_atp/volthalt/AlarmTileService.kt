@@ -10,19 +10,33 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
  * Quick Settings tile for the charging-limit alarm.
  *
- * The tile represents only the max-battery alarm setting. The low-battery alarm
- * has its own setting in the app and does not change this tile's active state.
+ * The tile's active state and click action represent the max-battery alarm.
+ * Its subtitle also reports the low-battery alarm state and both thresholds.
  */
 class AlarmTileService : TileService() {
+
+    private data class TileStatus(
+        val maxEnabled: Boolean,
+        val maxTarget: Int,
+        val lowEnabled: Boolean,
+        val lowTarget: Int
+    )
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var preferencesManager: PreferencesManager
     private var listeningJob: Job? = null
+    private var currentStatus = TileStatus(
+        maxEnabled = false,
+        maxTarget = 80,
+        lowEnabled = false,
+        lowTarget = 20
+    )
 
     override fun onCreate() {
         super.onCreate()
@@ -33,8 +47,16 @@ class AlarmTileService : TileService() {
         super.onStartListening()
         listeningJob?.cancel()
         listeningJob = serviceScope.launch {
-            preferencesManager.alarmEnabledFlow.collect { maxAlarmEnabled ->
-                applyTileState(maxAlarmEnabled)
+            combine(
+                preferencesManager.alarmEnabledFlow,
+                preferencesManager.targetPercentageFlow,
+                preferencesManager.lowAlarmEnabledFlow,
+                preferencesManager.lowTargetPercentageFlow
+            ) { maxEnabled, maxTarget, lowEnabled, lowTarget ->
+                TileStatus(maxEnabled, maxTarget, lowEnabled, lowTarget)
+            }.collect { status ->
+                currentStatus = status
+                applyTileState(status)
             }
         }
     }
@@ -48,10 +70,10 @@ class AlarmTileService : TileService() {
     override fun onClick() {
         super.onClick()
 
+        // The tile continues to toggle only the charging-limit alarm.
         val newActive = qsTile?.state != Tile.STATE_ACTIVE
-
-        // Update the tile immediately; the DataStore collector will confirm the state.
-        applyTileState(newActive)
+        currentStatus = currentStatus.copy(maxEnabled = newActive)
+        applyTileState(currentStatus)
         serviceScope.launch { preferencesManager.setAlarmEnabled(newActive) }
 
         try {
@@ -75,12 +97,26 @@ class AlarmTileService : TileService() {
         }
     }
 
-    private fun applyTileState(active: Boolean) {
+    private fun applyTileState(status: TileStatus) {
         val tile = qsTile ?: return
-        tile.state = if (active) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        tile.label = getString(if (active) R.string.tile_alarm_on else R.string.tile_alarm_off)
+        tile.state = if (status.maxEnabled) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        tile.label = getString(if (status.maxEnabled) R.string.tile_alarm_on else R.string.tile_alarm_off)
+
+        val statusText = getString(
+            R.string.alarm_status_format,
+            status.maxTarget,
+            getString(if (status.maxEnabled) R.string.alarm_status_enabled else R.string.alarm_status_disabled),
+            status.lowTarget,
+            getString(if (status.lowEnabled) R.string.alarm_status_enabled else R.string.alarm_status_disabled)
+        )
+
+        // Tile subtitles are available from Android 10 (API 29).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            tile.subtitle = getString(if (active) R.string.tile_monitoring else R.string.tile_disabled)
+            tile.subtitle = statusText
+        }
+        // State description is used by accessibility services on Android 11+.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            tile.stateDescription = statusText
         }
         tile.updateTile()
     }

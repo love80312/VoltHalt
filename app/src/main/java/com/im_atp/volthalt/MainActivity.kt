@@ -189,8 +189,11 @@ class MainActivity : ComponentActivity() {
 
     private fun startBatteryService() {
         lifecycleScope.launch {
-            val enabled = preferencesManager.alarmEnabledFlow.first()
-            if (enabled) {
+            val maxAlarmEnabled = preferencesManager.alarmEnabledFlow.first()
+            val lowAlarmEnabled = preferencesManager.lowAlarmEnabledFlow.first()
+
+            // The foreground service is required by either alarm type.
+            if (maxAlarmEnabled || lowAlarmEnabled) {
                 val intent = Intent(this@MainActivity, BatteryService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(intent)

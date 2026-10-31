@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -41,14 +42,12 @@ class BatteryService : Service() {
     private lateinit var preferencesManager: PreferencesManager
     private lateinit var alarmPlayer: AlarmPlayer
 
-    // Both flags are only ever touched on the main thread (batteryReceiver +
-    // onStartCommand both run there), so no synchronisation is needed.
+    // Both flags are only ever touched on the main thread.
     private var isMaxAlarmPlaying = false
     private var isLowAlarmPlaying = false
+    private var isMonitoring = false
 
-    // In-memory preference cache — kept in sync by lightweight collectors below.
-    // Using cached values in the battery receiver avoids DataStore reads on
-    // every battery broadcast, which can fire several times per minute.
+    // In-memory preference cache used by the battery receiver.
     private var maxEnabled   = false
     private var maxTarget    = 80
     private var maxSoundType = "ringtone"
@@ -84,17 +83,29 @@ class BatteryService : Service() {
         maxTtsText = getString(R.string.default_max_tts)
         lowTtsText = getString(R.string.default_low_tts)
 
-        // Start collectors that keep the in-memory cache in sync with DataStore.
-        // Each one is a single suspended collect() — negligible CPU, and DataStore
-        // itself caches the file in memory after the first read.
-        serviceScope.launch { preferencesManager.alarmEnabledFlow.collect       { maxEnabled   = it } }
-        serviceScope.launch { preferencesManager.targetPercentageFlow.collect    { maxTarget    = it } }
-        serviceScope.launch { preferencesManager.maxSoundTypeFlow.collect        { maxSoundType = it } }
-        serviceScope.launch { preferencesManager.maxTtsTextFlow.collect          { maxTtsText   = it } }
-        serviceScope.launch { preferencesManager.lowAlarmEnabledFlow.collect     { lowEnabled   = it } }
-        serviceScope.launch { preferencesManager.lowTargetPercentageFlow.collect { lowTarget    = it } }
-        serviceScope.launch { preferencesManager.lowSoundTypeFlow.collect        { lowSoundType = it } }
-        serviceScope.launch { preferencesManager.lowTtsTextFlow.collect          { lowTtsText   = it } }
+        // Keep alarm flags and thresholds synchronized with DataStore.
+        // Refresh the ongoing notification whenever either alarm setting changes.
+        serviceScope.launch {
+            combine(
+                preferencesManager.alarmEnabledFlow,
+                preferencesManager.targetPercentageFlow,
+                preferencesManager.lowAlarmEnabledFlow,
+                preferencesManager.lowTargetPercentageFlow
+            ) { maxActive, maxLevel, lowActive, lowLevel ->
+                maxEnabled = maxActive
+                maxTarget = maxLevel
+                lowEnabled = lowActive
+                lowTarget = lowLevel
+            }.collect {
+                updateServiceNotification()
+            }
+        }
+
+        // Cache sound preferences separately for alarm playback.
+        serviceScope.launch { preferencesManager.maxSoundTypeFlow.collect { maxSoundType = it } }
+        serviceScope.launch { preferencesManager.maxTtsTextFlow.collect   { maxTtsText = it } }
+        serviceScope.launch { preferencesManager.lowSoundTypeFlow.collect  { lowSoundType = it } }
+        serviceScope.launch { preferencesManager.lowTtsTextFlow.collect    { lowTtsText = it } }
 
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
     }
@@ -112,6 +123,7 @@ class BatteryService : Service() {
                 nm.cancel(ALARM_NOTIF_ID)
                 alarmPlayer.stop()
                 broadcastAlarmStopped()
+                isMonitoring = false
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
@@ -130,6 +142,7 @@ class BatteryService : Service() {
                     broadcastAlarmStopped()
                 }
                 if (!lowEnabled) {
+                    isMonitoring = false
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
                 }
@@ -144,12 +157,13 @@ class BatteryService : Service() {
         }
 
         // Normal start — begin foreground monitoring.
-        startForeground(SERVICE_NOTIF_ID, createServiceNotification(getString(R.string.monitoring_battery)))
+        isMonitoring = true
+        startForeground(SERVICE_NOTIF_ID, createServiceNotification())
         return START_STICKY
     }
 
     // Evaluates the current battery state against stored thresholds.
-    // Only reads in-memory fields — no coroutines, no IO, no allocation on the hot path.
+    // Only reads in-memory fields on the battery broadcast path.
     private fun checkBatteryLevel(currentLevel: Int, isCharging: Boolean) {
         if (maxEnabled && isCharging && currentLevel >= maxTarget) {
             if (!isMaxAlarmPlaying) {
@@ -170,8 +184,7 @@ class BatteryService : Service() {
         }
     }
 
-    // Reads the remaining alarm preferences (volume, vibration, ringtone) from DataStore
-    // and hands off to AlarmPlayer. Runs on the IO dispatcher.
+    // Reads the remaining alarm preferences and hands off to AlarmPlayer.
     private suspend fun startAlarm(type: String) {
         if (type == ALARM_TYPE_MAX) {
             val vibration   = preferencesManager.vibrationEnabledFlow.first()
@@ -265,14 +278,14 @@ class BatteryService : Service() {
     private fun cancelAlarmNotification() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(ALARM_NOTIF_ID)
-        nm.notify(SERVICE_NOTIF_ID, createServiceNotification(getString(R.string.monitoring_battery)))
+        updateServiceNotification()
     }
 
     private fun broadcastAlarmStopped() {
         sendBroadcast(Intent(ACTION_ALARM_STOPPED))
     }
 
-    private fun createServiceNotification(contentText: String): Notification {
+    private fun createServiceNotification(): Notification {
         val openIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
@@ -283,15 +296,34 @@ class BatteryService : Service() {
             Intent(this, BatteryService::class.java).apply { action = ACTION_STOP_SERVICE },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+
+        val statusText = getString(
+            R.string.alarm_status_format,
+            maxTarget,
+            getString(if (maxEnabled) R.string.alarm_status_enabled else R.string.alarm_status_disabled),
+            lowTarget,
+            getString(if (lowEnabled) R.string.alarm_status_enabled else R.string.alarm_status_disabled)
+        )
+
         return NotificationCompat.Builder(this, SERVICE_CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText(contentText)
+            .setContentText(statusText)
+            .setSubText(getString(R.string.monitoring_battery))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(statusText))
             .setSmallIcon(R.drawable.ic_app_icon)
             .setContentIntent(openIntent)
             .addAction(0, getString(R.string.stop_monitoring), stopIntent)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
+    }
+
+    private fun updateServiceNotification() {
+        if (!isMonitoring) return
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(SERVICE_NOTIF_ID, createServiceNotification())
     }
 
     private fun createNotificationChannels() {
@@ -320,6 +352,7 @@ class BatteryService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isMonitoring = false
         try { unregisterReceiver(batteryReceiver) } catch (_: Exception) {}
         alarmPlayer.stop()
         serviceScope.cancel()
