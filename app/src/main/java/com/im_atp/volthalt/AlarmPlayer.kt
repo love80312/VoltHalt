@@ -50,8 +50,18 @@ class AlarmPlayer(private val context: Context) {
         }
     }
 
+    /**
+     * Starts ringtone playback without blocking the calling (main) thread while
+     * the audio source is prepared. All player state changes and callbacks are
+     * expected to run on the main thread.
+     */
     fun play(ringtoneUriString: String?, enableVibration: Boolean, volumePercent: Int = 80) {
-        if (mediaPlayer?.isPlaying == true) return
+        // A non-null player also represents a player that is still preparing.
+        if (mediaPlayer != null || ttsActive) return
+
+        val generation = ++playbackGeneration
+        val player = MediaPlayer()
+        mediaPlayer = player
 
         val uri = if (ringtoneUriString.isNullOrEmpty()) {
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
@@ -60,28 +70,66 @@ class AlarmPlayer(private val context: Context) {
             Uri.parse(ringtoneUriString)
         }
 
-        applyAlarmStreamVolume(volumePercent)
-
         try {
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(context, uri)
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
-                isLooping = true
-                prepare()
-                setVolume(1.0f, 1.0f)
-                start()
+            applyAlarmStreamVolume(volumePercent)
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            player.isLooping = true
+            player.setOnPreparedListener { preparedPlayer ->
+                // stop() or a newer playback session may have invalidated this
+                // callback while the audio source was being prepared.
+                if (generation != playbackGeneration || mediaPlayer !== preparedPlayer) {
+                    return@setOnPreparedListener
+                }
+
+                try {
+                    preparedPlayer.setVolume(1.0f, 1.0f)
+                    preparedPlayer.start()
+                    if (enableVibration) startVibration()
+                } catch (exception: Exception) {
+                    exception.printStackTrace()
+                    finishMediaPlayerSession(generation, preparedPlayer)
+                }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            restoreStreamVolume()
+            player.setOnErrorListener { failedPlayer, _, _ ->
+                finishMediaPlayerSession(generation, failedPlayer)
+                true
+            }
+            player.setDataSource(context, uri)
+            player.prepareAsync()
+        } catch (exception: Exception) {
+            exception.printStackTrace()
+            finishMediaPlayerSession(generation, player)
+        }
+    }
+
+    /** Clears and releases a failed player only if it still owns this session. */
+    private fun finishMediaPlayerSession(generation: Long, player: MediaPlayer) {
+        if (generation != playbackGeneration || mediaPlayer !== player) return
+
+        mediaPlayer = null
+        releaseMediaPlayerSafely(player)
+        vibrator?.cancel()
+        restoreStreamVolume()
+    }
+
+    /** Releases a player safely, including one that failed during preparation. */
+    private fun releaseMediaPlayerSafely(player: MediaPlayer) {
+        try {
+            if (player.isPlaying) player.stop()
+        } catch (_: Exception) {
+            // The player may not have reached a state in which stop() is valid.
         }
 
-        if (enableVibration) startVibration()
+        try {
+            player.release()
+        } catch (_: Exception) {
+            // A late callback may refer to a player already released by stop().
+        }
     }
 
     // Plays a TTS message on repeat with a short gap between each utterance.
@@ -89,7 +137,7 @@ class AlarmPlayer(private val context: Context) {
     // the main thread; the repeat coroutine uses the same dispatcher so stop()
     // cannot race a queued TTS speak() call.
     fun playTts(text: String, enableVibration: Boolean, volumePercent: Int = 80) {
-        if (ttsActive) return
+        if (ttsActive || mediaPlayer != null) return
         val generation = ++playbackGeneration
         ttsActive = true
 
@@ -147,20 +195,15 @@ class AlarmPlayer(private val context: Context) {
     }
 
     fun stop() {
-        // Invalidate pending TTS initialization and repeat callbacks first.
+        // Invalidate pending MediaPlayer preparation and TTS callbacks first.
         playbackGeneration++
         ttsActive = false
 
-        // Stop ringtone player.
-        mediaPlayer?.let {
-            try {
-                if (it.isPlaying) it.stop()
-            } catch (_: IllegalStateException) {
-                // MediaPlayer can be in an invalid state if the source had an error.
-            }
-            it.release()
+        // Detach the player before releasing it so any late callback is stale.
+        mediaPlayer?.let { player ->
+            mediaPlayer = null
+            releaseMediaPlayerSafely(player)
         }
-        mediaPlayer = null
 
         // Cancel the repeat loop before stopping TTS, so onDone() cannot re-queue speech.
         ttsScope?.cancel()
