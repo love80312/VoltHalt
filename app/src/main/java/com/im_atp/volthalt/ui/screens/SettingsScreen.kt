@@ -1,6 +1,7 @@
 package com.im_atp.volthalt.ui.screens
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
@@ -25,7 +26,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,6 +72,8 @@ fun SettingsScreen(
     onNavigateToSetup: () -> Unit = {}
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Max battery alarm state
     val maxTarget    by preferencesManager.targetPercentageFlow.collectAsState(initial = 80)
@@ -93,12 +95,19 @@ fun SettingsScreen(
     // Appearance state
     val themeMode by preferencesManager.themeModeFlow.collectAsState(initial = "system")
 
+    fun showAudioFileError() {
+        coroutineScope.launch {
+            snackbarHostState.showSnackbar(context.getString(R.string.audio_file_access_error))
+        }
+    }
+
     val maxRingtoneLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             @Suppress("DEPRECATION")
             val uri: Uri? = result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            releasePersistedAudioPermission(context, maxRingtone, uri)
             coroutineScope.launch { preferencesManager.setRingtoneUri(uri?.toString() ?: "") }
         }
     }
@@ -108,11 +117,66 @@ fun SettingsScreen(
         if (result.resultCode == Activity.RESULT_OK) {
             @Suppress("DEPRECATION")
             val uri: Uri? = result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            releasePersistedAudioPermission(context, lowRingtone, uri)
             coroutineScope.launch { preferencesManager.setLowRingtoneUri(uri?.toString() ?: "") }
         }
     }
 
+    // The Storage Access Framework grants access only to the file the user chooses.
+    // Persist the URI grant so the alarm can read that file after the app is restarted.
+    val maxAudioFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val uri = data?.data
+            if (data != null && uri != null) {
+                val readGrant = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+                val canPersist = data.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0
+                if (readGrant == 0 || !canPersist) {
+                    showAudioFileError()
+                } else {
+                    try {
+                        context.contentResolver.takePersistableUriPermission(uri, readGrant)
+                        releasePersistedAudioPermission(context, maxRingtone, uri)
+                        coroutineScope.launch { preferencesManager.setRingtoneUri(uri.toString()) }
+                    } catch (_: SecurityException) {
+                        showAudioFileError()
+                    } catch (_: IllegalArgumentException) {
+                        showAudioFileError()
+                    }
+                }
+            }
+        }
+    }
+    val lowAudioFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val uri = data?.data
+            if (data != null && uri != null) {
+                val readGrant = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+                val canPersist = data.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0
+                if (readGrant == 0 || !canPersist) {
+                    showAudioFileError()
+                } else {
+                    try {
+                        context.contentResolver.takePersistableUriPermission(uri, readGrant)
+                        releasePersistedAudioPermission(context, lowRingtone, uri)
+                        coroutineScope.launch { preferencesManager.setLowRingtoneUri(uri.toString()) }
+                    } catch (_: SecurityException) {
+                        showAudioFileError()
+                    } catch (_: IllegalArgumentException) {
+                        showAudioFileError()
+                    }
+                }
+            }
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.settings), fontWeight = FontWeight.Bold) },
@@ -132,9 +196,8 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 40.dp)
         ) {
-            val isDark    = isSystemInDarkTheme()
-            val maxAccent = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
-            val lowAccent = if (isDark) Color(0xFFFB923C) else Color(0xFFC2410C)
+            val maxAccent = MaterialTheme.colorScheme.secondary
+            val lowAccent = MaterialTheme.colorScheme.tertiary
 
             // Max Battery Alarm section
             AlarmSectionHeader(
@@ -160,6 +223,7 @@ fun SettingsScreen(
                 accentColor        = maxAccent,
                 onSoundTypeChange  = { coroutineScope.launch { preferencesManager.setMaxSoundType(it) } },
                 onPickRingtone     = { maxRingtoneLauncher.launch(buildRingtoneIntent(maxRingtone)) },
+                onPickAudioFile    = { maxAudioFileLauncher.launch(buildOpenAudioIntent()) },
                 onTtsTextChange    = { coroutineScope.launch { preferencesManager.setMaxTtsText(it) } }
             )
             SettingsDivider()
@@ -223,6 +287,7 @@ fun SettingsScreen(
                 enabled            = lowEnabled,
                 onSoundTypeChange  = { if (lowEnabled) coroutineScope.launch { preferencesManager.setLowSoundType(it) } },
                 onPickRingtone     = { if (lowEnabled) lowRingtoneLauncher.launch(buildRingtoneIntent(lowRingtone)) },
+                onPickAudioFile    = { if (lowEnabled) lowAudioFileLauncher.launch(buildOpenAudioIntent()) },
                 onTtsTextChange    = { if (lowEnabled) coroutineScope.launch { preferencesManager.setLowTtsText(it) } }
             )
             SettingsDivider()
@@ -265,8 +330,7 @@ fun SettingsScreen(
 
 @Composable
 private fun SetupSectionHeader() {
-    val isDark      = isSystemInDarkTheme()
-    val accentColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
+    val accentColor = MaterialTheme.colorScheme.primary
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -370,7 +434,7 @@ private fun SetupWizardRow(onNavigateToSetup: () -> Unit) {
 @Composable
 private fun TtsSettingsRow() {
     val context     = LocalContext.current
-    val accentColor = if (isSystemInDarkTheme()) Color(0xFF34D399) else Color(0xFF059669)
+    val accentColor = MaterialTheme.colorScheme.secondary
 
     // Try three intents in order to guarantee TTS settings open on any OEM ROM.
     fun openTtsSettings() {
@@ -526,11 +590,12 @@ private fun AppearanceThemeRow(currentMode: String, onModeChange: (String) -> Un
         )
         Spacer(Modifier.height(12.dp))
 
+        // Two rows keep all four choices readable on narrow phone screens.
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             SegmentedButton(
                 selected = currentMode == "system",
                 onClick  = { onModeChange("system") },
-                shape    = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                shape    = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                 icon = {
                     SegmentedButtonDefaults.Icon(active = currentMode == "system") {
                         Icon(Icons.Default.SettingsBrightness, contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
@@ -541,24 +606,39 @@ private fun AppearanceThemeRow(currentMode: String, onModeChange: (String) -> Un
             SegmentedButton(
                 selected = currentMode == "light",
                 onClick  = { onModeChange("light") },
-                shape    = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                shape    = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                 icon = {
                     SegmentedButtonDefaults.Icon(active = currentMode == "light") {
                         Icon(Icons.Default.LightMode, contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
                     }
                 }
             ) { Text(stringResource(R.string.theme_light)) }
+        }
 
+        Spacer(Modifier.height(8.dp))
+
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             SegmentedButton(
                 selected = currentMode == "dark",
                 onClick  = { onModeChange("dark") },
-                shape    = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                shape    = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                 icon = {
                     SegmentedButtonDefaults.Icon(active = currentMode == "dark") {
                         Icon(Icons.Default.DarkMode, contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
                     }
                 }
             ) { Text(stringResource(R.string.theme_dark)) }
+
+            SegmentedButton(
+                selected = currentMode == "comfort",
+                onClick  = { onModeChange("comfort") },
+                shape    = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                icon = {
+                    SegmentedButtonDefaults.Icon(active = currentMode == "comfort") {
+                        Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
+                    }
+                }
+            ) { Text(stringResource(R.string.theme_comfort)) }
         }
     }
 }
@@ -573,6 +653,7 @@ private fun AlarmSoundBlock(
     enabled: Boolean = true,
     onSoundTypeChange: (String) -> Unit,
     onPickRingtone: () -> Unit,
+    onPickAudioFile: () -> Unit,
     onTtsTextChange: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -637,12 +718,8 @@ private fun AlarmSoundBlock(
                     context      = context
                 )
                 else -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment     = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column {
                             Text(
                                 stringResource(R.string.selected_ringtone),
                                 fontWeight = FontWeight.Medium,
@@ -655,13 +732,30 @@ private fun AlarmSoundBlock(
                                 color    = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
                             )
                         }
-                        OutlinedButton(
-                            onClick        = onPickRingtone,
-                            enabled        = enabled,
-                            shape          = RoundedCornerShape(10.dp),
-                            modifier       = Modifier.height(36.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp)
-                        ) { Text(stringResource(R.string.change), fontSize = 13.sp) }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onPickRingtone,
+                                enabled = enabled,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(0.85f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(stringResource(R.string.system_ringtone), fontSize = 12.sp, maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = onPickAudioFile,
+                                enabled = enabled,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1.15f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(stringResource(R.string.select_audio_file), fontSize = 12.sp, maxLines = 1)
+                            }
+                        }
                     }
                 }
             }
@@ -675,7 +769,7 @@ private fun TtsTextRow(
     accentColor: Color,
     enabled: Boolean,
     onTextChange: (String) -> Unit,
-    context: android.content.Context
+    context: Context
 ) {
     var draft     by remember(ttsText) { mutableStateOf(ttsText) }
     // Guard against the user tapping "Test Voice" multiple times rapidly.
@@ -913,3 +1007,24 @@ private fun buildRingtoneIntent(existingUri: String?) =
             putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(existingUri))
         }
     }
+
+private fun buildOpenAudioIntent() =
+    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+        addCategory(Intent.CATEGORY_OPENABLE)
+        type = "audio/*"
+    }
+
+private fun releasePersistedAudioPermission(context: Context, previousUri: String?, newUri: Uri?) {
+    if (previousUri.isNullOrBlank() || previousUri == newUri?.toString()) return
+
+    try {
+        context.contentResolver.releasePersistableUriPermission(
+            Uri.parse(previousUri),
+            Intent.FLAG_GRANT_READ_URI_PERMISSION
+        )
+    } catch (_: SecurityException) {
+        // System ringtone URIs and non-persisted URIs do not have a grant to release.
+    } catch (_: IllegalArgumentException) {
+        // Ignore malformed or no-longer-valid previously stored URIs.
+    }
+}

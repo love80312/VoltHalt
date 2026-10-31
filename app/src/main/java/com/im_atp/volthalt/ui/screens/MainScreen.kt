@@ -27,7 +27,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -269,7 +268,7 @@ fun MainScreen(
                     color    = MaterialTheme.colorScheme.surface,
                     border   = androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        Color(0xFFFB923C).copy(alpha = 0.5f)
+                        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)
                     )
                 ) {
                     Row(
@@ -281,13 +280,13 @@ fun MainScreen(
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
-                                .background(Color(0xFFFB923C).copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.BatteryAlert,
                                 contentDescription = null,
-                                tint     = Color(0xFFFB923C),
+                                tint     = MaterialTheme.colorScheme.tertiary,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -315,7 +314,7 @@ fun MainScreen(
                             onClick        = onNavigateToSetup,
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                         ) {
-                            Text(stringResource(R.string.fix), fontWeight = FontWeight.Bold, color = Color(0xFFFB923C))
+                            Text(stringResource(R.string.fix), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
                         }
                     }
                 }
@@ -335,9 +334,8 @@ fun MainScreen(
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp)
             )
 
-            val isDark    = isSystemInDarkTheme()
-            val maxAccent = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
-            val lowAccent = if (isDark) Color(0xFFFB923C) else Color(0xFFC2410C)
+            val maxAccent = MaterialTheme.colorScheme.secondary
+            val lowAccent = MaterialTheme.colorScheme.tertiary
 
             AlarmCard(
                 title          = stringResource(R.string.max_battery_alarm),
@@ -439,11 +437,21 @@ private fun PreviewAlarmButton(isPlaying: Boolean, onClick: () -> Unit) {
         label         = "buttonScale"
     )
 
-    val accentColor     = MaterialTheme.colorScheme.primary
-    val buttonGradient  = if (isPlaying) {
-        Brush.linearGradient(listOf(Color(0xFF4F46E5).copy(alpha = 0.85f), Color(0xFF7C3AED).copy(alpha = 0.85f)))
+    val accentColor = MaterialTheme.colorScheme.primary
+    val buttonGradient = if (isPlaying) {
+        Brush.linearGradient(
+            listOf(
+                MaterialTheme.colorScheme.secondary.copy(alpha = 0.95f),
+                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.95f)
+            )
+        )
     } else {
-        Brush.linearGradient(listOf(accentColor.copy(alpha = 0.18f), Color(0xFFA78BFA).copy(alpha = 0.12f)))
+        Brush.linearGradient(
+            listOf(
+                MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
+                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f)
+            )
+        )
     }
 
     Card(
@@ -579,7 +587,7 @@ private fun PreviewAlarmSheetContent(
             title       = stringResource(R.string.max_battery_alarm),
             description = stringResource(R.string.preview_charge_description),
             icon        = Icons.Default.BatteryChargingFull,
-            accentColor = Color(0xFF4ADE80),
+            accentColor = MaterialTheme.colorScheme.secondary,
             isActive    = previewingType == PreviewAlarmType.MAX,
             onClick     = { if (previewingType == null) onPreviewMax() }
         )
@@ -590,7 +598,7 @@ private fun PreviewAlarmSheetContent(
             title       = stringResource(R.string.low_battery_alarm),
             description = stringResource(R.string.preview_low_description),
             icon        = Icons.Default.BatteryAlert,
-            accentColor = Color(0xFFFB923C),
+            accentColor = MaterialTheme.colorScheme.tertiary,
             isActive    = previewingType == PreviewAlarmType.LOW,
             onClick     = { if (previewingType == null) onPreviewLow() }
         )
@@ -726,11 +734,10 @@ private fun PreviewOptionCard(
 
 @Composable
 private fun BatteryStatusCard(level: Int, isCharging: Boolean) {
-    val isDark       = isSystemInDarkTheme()
     val batteryColor = when {
-        level >= 70 -> if (isDark) Color(0xFF4ADE80) else Color(0xFF16A34A)
-        level >= 30 -> if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
-        else        -> if (isDark) Color(0xFFF87171) else Color(0xFFDC2626)
+        level >= 70 -> MaterialTheme.colorScheme.secondary
+        level >= 30 -> MaterialTheme.colorScheme.tertiary
+        else        -> MaterialTheme.colorScheme.error
     }
 
     val gradientBrush = Brush.linearGradient(
@@ -839,7 +846,7 @@ private fun AlarmCard(
     )
     val animatedAccent by animateColorAsState(
         targetValue   = if (isEnabled) accentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        animationSpec = tween(300),
         label         = "accent"
     )
 
