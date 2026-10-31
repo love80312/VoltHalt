@@ -12,6 +12,7 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +37,7 @@ class BatteryService : Service() {
         private const val SERVICE_NOTIF_ID   = 1
         private const val ALARM_CHANNEL_ID   = "BatteryAlarmChannel"
         private const val ALARM_NOTIF_ID     = 2
+        private const val TAG                 = "BatteryService"
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -97,6 +99,9 @@ class BatteryService : Service() {
                 lowEnabled = lowActive
                 lowTarget = lowLevel
             }.collect {
+                // Silence an alarm immediately if its corresponding switch is disabled.
+                if (!maxEnabled && isMaxAlarmPlaying) stopMaxAlarm()
+                if (!lowEnabled && isLowAlarmPlaying) stopLowAlarm()
                 updateServiceNotification()
             }
         }
@@ -116,43 +121,61 @@ class BatteryService : Service() {
             // User hit "Stop Monitoring" — disable both alarms and kill the service.
             ACTION_STOP_SERVICE -> {
                 serviceScope.launch {
-                    preferencesManager.setAlarmEnabled(false)
-                    preferencesManager.setLowAlarmEnabled(false)
+                    try {
+                        // Do not destroy the service until both settings are saved.
+                        preferencesManager.setAlarmEnabled(false)
+                        preferencesManager.setLowAlarmEnabled(false)
+                        stopMonitoringService(startId)
+                    } catch (exception: Exception) {
+                        Log.e(TAG, "Unable to save alarm settings while stopping monitoring.", exception)
+                    }
                 }
-                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.cancel(ALARM_NOTIF_ID)
-                alarmPlayer.stop()
-                broadcastAlarmStopped()
-                isMonitoring = false
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-                return START_NOT_STICKY
+                // stopSelf(startId) prevents a successful stop from being restarted.
+                // If saving fails, the still-running service retains sticky behavior.
+                return START_STICKY
             }
 
             // Quick tile toggled the max-battery alarm off.
             // If the low-battery alarm is still active we keep the service running.
             ACTION_STOP_MAX_ALARM_FROM_TILE -> {
-                if (isMaxAlarmPlaying) {
-                    isMaxAlarmPlaying = false
-                    if (!isLowAlarmPlaying) {
-                        alarmPlayer.stop()
-                        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                        nm.cancel(ALARM_NOTIF_ID)
+                // A tile action may reach a newly-created service instance. Promote it
+                // immediately so the service meets Android's foreground-service deadline.
+                if (!isMonitoring) {
+                    isMonitoring = true
+                    startForeground(SERVICE_NOTIF_ID, createServiceNotification())
+                }
+
+                serviceScope.launch {
+                    if (isMaxAlarmPlaying) {
+                        isMaxAlarmPlaying = false
+                        if (!isLowAlarmPlaying) {
+                            alarmPlayer.stop()
+                            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                            nm.cancel(ALARM_NOTIF_ID)
+                        }
+                        broadcastAlarmStopped()
                     }
-                    broadcastAlarmStopped()
+
+                    // Query DataStore directly: the in-memory collector may still be
+                    // processing the tile's most recent setting change.
+                    val maxStillEnabled = preferencesManager.alarmEnabledFlow.first()
+                    val lowStillEnabled = preferencesManager.lowAlarmEnabledFlow.first()
+
+                    if (!maxStillEnabled && !lowStillEnabled) {
+                        stopMonitoringService(startId)
+                    } else {
+                        updateServiceNotification()
+                    }
                 }
-                if (!lowEnabled) {
-                    isMonitoring = false
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
-                }
-                return START_NOT_STICKY
+                // If low-battery monitoring remains enabled, keep sticky restart behavior.
+                return START_STICKY
             }
 
             // Silence the alarm but keep the service monitoring.
             ACTION_STOP_ALARM -> {
                 stopAllAlarms()
-                return START_NOT_STICKY
+                // Silencing an alarm does not mean monitoring has been disabled.
+                return START_STICKY
             }
         }
 
@@ -283,6 +306,23 @@ class BatteryService : Service() {
 
     private fun broadcastAlarmStopped() {
         sendBroadcast(Intent(ACTION_ALARM_STOPPED))
+    }
+
+    /**
+     * Stops the service after the relevant preference writes have completed.
+     * Used by the Stop Monitoring action and when the tile turns off the last alarm.
+     */
+    private fun stopMonitoringService(startId: Int) {
+        isMaxAlarmPlaying = false
+        isLowAlarmPlaying = false
+        alarmPlayer.stop()
+        isMonitoring = false
+
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.cancel(ALARM_NOTIF_ID)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        broadcastAlarmStopped()
+        stopSelf(startId)
     }
 
     private fun createServiceNotification(): Notification {

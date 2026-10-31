@@ -2,6 +2,7 @@ package com.im_atp.volthalt
 
 import android.content.Intent
 import android.os.Build
+import androidx.core.content.ContextCompat
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import kotlinx.coroutines.CoroutineScope
@@ -74,26 +75,28 @@ class AlarmTileService : TileService() {
         val newActive = qsTile?.state != Tile.STATE_ACTIVE
         currentStatus = currentStatus.copy(maxEnabled = newActive)
         applyTileState(currentStatus)
-        serviceScope.launch { preferencesManager.setAlarmEnabled(newActive) }
+        serviceScope.launch {
+            try {
+                // Persist first so BatteryService reads the latest alarm states.
+                preferencesManager.setAlarmEnabled(newActive)
 
-        try {
-            if (newActive) {
-                val intent = Intent(applicationContext, BatteryService::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    applicationContext.startForegroundService(intent)
+                if (newActive) {
+                    ContextCompat.startForegroundService(
+                        applicationContext,
+                        Intent(applicationContext, BatteryService::class.java)
+                    )
                 } else {
-                    applicationContext.startService(intent)
+                    ContextCompat.startForegroundService(
+                        applicationContext,
+                        Intent(applicationContext, BatteryService::class.java).apply {
+                            action = BatteryService.ACTION_STOP_MAX_ALARM_FROM_TILE
+                        }
+                    )
                 }
-            } else {
-                applicationContext.startService(
-                    Intent(applicationContext, BatteryService::class.java).apply {
-                        action = BatteryService.ACTION_STOP_MAX_ALARM_FROM_TILE
-                    }
-                )
+            } catch (_: Exception) {
+                // Some OEMs restrict background service starts. The app UI can still
+                // be opened to review permissions and monitoring settings.
             }
-        } catch (_: Exception) {
-            // Some OEMs restrict background service starts. The app UI can still
-            // be opened to review permissions and monitoring settings.
         }
     }
 
