@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VoltHalt</string>
+
+    <!-- 主畫面 -->
+    <string name="share_apk">分享 APK</string>
+    <string name="share_apk_chooser">分享 %1$s APK</string>
+    <string name="settings">設定</string>
+    <string name="optimization_recommended">建議關閉電池最佳化</string>
+    <string name="optimization_permissions_description">授予必要權限，確保背景警報能準時觸發</string>
+    <string name="fix">前往設定</string>
+    <string name="alarms">警報</string>
+    <string name="max_battery_alarm">充電上限警報</string>
+    <string name="max_battery_alarm_description">充電時，電量達到設定值便發出提醒</string>
+    <string name="low_battery_alarm">低電量警報</string>
+    <string name="low_battery_alarm_description">未充電時，電量低於設定值便發出提醒</string>
+    <string name="threshold_label">%1$d%% 門檻</string>
+    <string name="configure_alarm_settings">設定警報</string>
+    <string name="preview_alarm">警報試聽</string>
+    <string name="preview_playing">正在播放試聽音效…</string>
+    <string name="tap_to_stop_preview">點擊停止・5 秒後自動停止</string>
+    <string name="test_alarm_sound">測試警報音效</string>
+    <string name="choose_alarm_preview">選擇要試聽的警報類型。</string>
+    <string name="preview_instructions">使用已儲存的設定播放 5 秒。</string>
+    <string name="preview_charge_description">電量達到充電警報門檻時觸發</string>
+    <string name="preview_low_description">電量低於低電量警報門檻時觸發</string>
+    <string name="stop_preview">停止試聽</string>
+    <string name="play">播放</string>
+    <string name="charging">充電中</string>
+    <string name="not_charging">未充電</string>
+
+    <!-- 設定畫面 -->
+    <string name="back">返回</string>
+    <string name="max_alarm_settings_description">充電時，電量達到設定百分比便觸發</string>
+    <string name="target_percentage">目標電量</string>
+    <string name="charge_target_description">充電電量達到此百分比時發出警報</string>
+    <string name="low_alarm_settings_description">未充電時，電量低於設定門檻便觸發</string>
+    <string name="enable_low_battery_alarm">啟用低電量警報</string>
+    <string name="enable_low_alarm_description">開啟後即可監控低電量狀態</string>
+    <string name="trigger_percentage">觸發電量</string>
+    <string name="low_target_description">未充電時，電量降至此百分比便發出警報</string>
+    <string name="setup_permissions">初始設定與權限</string>
+    <string name="setup_permissions_description">設定權限、快速設定磁貼及背景執行</string>
+    <string name="rerun_setup_wizard">重新執行設定精靈</string>
+    <string name="reconfigure_permissions">重新設定權限、電池最佳化或快速設定磁貼</string>
+    <string name="text_to_speech">語音合成</string>
+    <string name="voice_engine">語音引擎、語速與音調</string>
+    <string name="configure_tts_voice">設定語音合成</string>
+    <string name="tts_voice_description">在 Android 系統設定中調整語速、音調及偏好的語音引擎</string>
+    <string name="opens_android_settings">開啟 Android 系統設定</string>
+    <string name="appearance">外觀</string>
+    <string name="appearance_description">選擇偏好的色彩主題</string>
+    <string name="app_theme">應用程式主題</string>
+    <string name="theme_changes_immediately">變更後會立即套用至整個應用程式</string>
+    <string name="theme_system">跟隨系統</string>
+    <string name="theme_light">淺色</string>
+    <string name="theme_dark">深色</string>
+    <string name="alarm_sound">警報音效</string>
+    <string name="alarm_sound_description">選擇鈴聲或語音訊息</string>
+    <string name="ringtone">鈴聲</string>
+    <string name="selected_ringtone">目前選取的鈴聲</string>
+    <string name="custom_ringtone_selected">已選取自訂鈴聲</string>
+    <string name="default_alarm_ringtone">系統預設鬧鐘鈴聲</string>
+    <string name="change">變更</string>
+    <string name="spoken_when_alarm_fires">警報觸發時播放的語音：</string>
+    <string name="tts_placeholder">輸入警報時要播報的內容…</string>
+    <string name="save_message">儲存訊息</string>
+    <string name="playing">播放中…</string>
+    <string name="test_voice">測試語音</string>
+    <string name="alarm_volume">警報音量</string>
+    <string name="independent_system_volume">不受系統音量影響</string>
+    <string name="vibration">震動</string>
+    <string name="vibrate_when_alarm_triggers">警報觸發時震動</string>
+
+    <!-- 初始設定精靈 -->
+    <string name="welcome_to">歡迎使用</string>
+    <string name="setup_intro">先完成幾項設定，確保警報能在背景正常運作。</string>
+    <string name="notifications">通知</string>
+    <string name="notifications_description">當電量達到設定值時，需要透過通知提醒你。</string>
+    <string name="allow">允許</string>
+    <string name="unrestricted_battery">不受限制的電池用量</string>
+    <string name="unrestricted_battery_description">這是背景監控的重要設定。關閉電池最佳化不會損害裝置，只是為了確保 VoltHalt 能準時響鈴，並讓快速設定磁貼保持正常運作。</string>
+    <string name="disable_optimization">關閉電池最佳化</string>
+    <string name="alarm_popup_permission">警報彈出視窗權限</string>
+    <string name="alarm_popup_description">警報觸發時，允許 VoltHalt 在鎖定畫面上顯示全螢幕提醒。若未授予此權限，警報只會以通知方式顯示。</string>
+    <string name="allow_popups">允許彈出視窗</string>
+    <string name="quick_settings_tile">快速設定磁貼</string>
+    <string name="quick_settings_tile_description">在下拉式快速設定面板加入開關，方便快速啟用或停用警報。</string>
+    <string name="add_tile">新增磁貼</string>
+    <string name="finish_setup">完成設定</string>
+    <string name="completed">已完成</string>
+
+    <!-- 警報畫面 -->
+    <string name="max_battery_reached">已達充電上限！</string>
+    <string name="low_battery_warning">低電量警告！</string>
+    <string name="max_battery_alarm_message">電量已達到設定值。\n請拔除充電器，或按下「停止」關閉警報。</string>
+    <string name="low_battery_alarm_message">電池電量過低！\n請盡快接上充電器。</string>
+    <string name="stop_alarm">停止警報</string>
+    <string name="stop_alarm_uppercase">停止警報</string>
+
+    <!-- 通知與快速設定 -->
+    <string name="monitoring_battery">正在監控電池電量…</string>
+    <string name="stop_monitoring">停止監控</string>
+    <string name="battery_monitoring_channel">電池監控</string>
+    <string name="battery_monitoring_channel_description">VoltHalt 監控電池時持續顯示的通知。</string>
+    <string name="battery_alarm_channel">電池警報</string>
+    <string name="battery_alarm_channel_description">電池警報觸發時顯示的通知。</string>
+    <string name="notification_max_battery_title">⚡ 已達充電上限！</string>
+    <string name="notification_low_battery_title">🪫 低電量警告！</string>
+    <string name="notification_max_battery_message">電量已達到設定值，請拔除充電器。</string>
+    <string name="notification_low_battery_message">電池電量過低，請盡快充電。</string>
+    <string name="tile_alarm_on">警報已開啟</string>
+    <string name="tile_alarm_off">警報已關閉</string>
+    <string name="tile_monitoring">監控中</string>
+    <string name="tile_disabled">已停用</string>
+
+    <!-- 預設語音內容 -->
+    <string name="default_max_tts">充電已達設定電量</string>
+    <string name="default_low_tts">電量過低，請儘速充電</string>
+</resources>
