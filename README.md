@@ -36,6 +36,7 @@ VoltHalt supports Android 8.0 (API 26) and later and does not require root acces
 | **Quick Settings tile** | Toggle the **charging-limit alarm** from Android's Quick Settings panel. The tile reflects the charging-limit alarm setting; the low-battery alarm is controlled separately in the app. |
 | **Full-screen alarm screen** | Show an alarm screen over the lock screen when Android permits the full-screen notification. |
 | **Automatic charging-alarm stop** | The charging-limit alarm stops when the device is no longer charging. |
+| **Automatic monitoring resume** | After a device reboot, monitoring resumes only when setup is complete and the monitoring master switch was enabled. |
 | **Five-second preview** | Preview the saved sound, TTS message, volume, and vibration settings. |
 | **Appearance themes** | Choose System, Light, Dark, or **Comfort** (護眼) theme. |
 | **Setup wizard** | Review notification, battery-optimization, full-screen notification, and Quick Settings setup. |
@@ -60,6 +61,7 @@ Long-pressing the tile opens VoltHalt. The exact editing steps and tile layout m
 - Alarm preferences are stored locally with Preferences DataStore.
 - Custom audio is selected with Android's Storage Access Framework. VoltHalt does not request broad storage access; it retains read access only to the file the user selects, when the document provider grants a persistable permission.
 - Android's selected TTS engine may have its own network behavior. Likewise, a document provider may expose cloud-backed files. Those behaviors are controlled by the selected system component or provider, not by an Internet permission in VoltHalt.
+- The app requests `RECEIVE_BOOT_COMPLETED` so it can resume monitoring after boot, but only when setup has been completed and the saved monitoring master switch is enabled.
 
 VoltHalt itself cannot make ordinary Internet connections without the Internet permission, but the behavior of separately selected Android system services and document providers is outside the app's control.
 
@@ -153,6 +155,7 @@ VoltHalt/
 │       │   ├── AlarmPlayer.kt           # Ringtone and TTS playback
 │       │   ├── AlarmTileService.kt      # Quick Settings tile
 │       │   ├── PreferencesManager.kt    # Preferences DataStore access
+│       │   ├── BootReceiver.kt          # Resume monitoring after device boot
 │       │   └── ui/
 │       │       ├── screens/
 │       │       │   ├── MainScreen.kt
@@ -177,12 +180,16 @@ VoltHalt declares the following Android permissions for its current features:
 | `FOREGROUND_SERVICE` | Allows the app to run its battery-monitoring foreground service. |
 | `FOREGROUND_SERVICE_SPECIAL_USE` | Declares the special-use foreground-service type on supported Android versions. |
 | `VIBRATE` | Enables vibration alerts. |
+| `MODIFY_AUDIO_SETTINGS` | Allows the app to temporarily set the system alarm-stream volume for alarm playback and restore the previous value when playback stops. This is a normal permission and does not require a runtime permission prompt. |
 | `POST_NOTIFICATIONS` | Allows monitoring and alarm notifications on Android 13 and later. |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Allows the setup flow to request exemption from battery optimization. The user decides whether to grant it. |
 | `WAKE_LOCK` | Keeps the CPU awake while the alarm screen or alarm handling requires it. |
 | `USE_FULL_SCREEN_INTENT` | Allows eligible alarm notifications to request a full-screen presentation; Android may require the user to enable this access. |
+| `RECEIVE_BOOT_COMPLETED` | Allows the app to receive the system boot-completed broadcast and resume monitoring when setup is complete and the monitoring master switch is enabled. |
 
-The app does **not** declare `INTERNET`, `READ_EXTERNAL_STORAGE`, `READ_MEDIA_AUDIO`, or `MANAGE_EXTERNAL_STORAGE`. The app does not currently implement automatic monitoring restart after a device reboot, so it does not request `RECEIVE_BOOT_COMPLETED`.
+The app does **not** declare `INTERNET`, `READ_EXTERNAL_STORAGE`, `READ_MEDIA_AUDIO`, or `MANAGE_EXTERNAL_STORAGE`. It does not restart monitoring after boot when the master switch is off or setup has not been completed.
+
+The alarm-volume setting temporarily changes the device's system alarm stream while an alarm is active. VoltHalt restores the previous value when playback stops normally. Android may terminate an app process without running cleanup code, so restoration cannot be guaranteed after an abrupt process termination or device shutdown.
 
 ## Issues and contributions
 
