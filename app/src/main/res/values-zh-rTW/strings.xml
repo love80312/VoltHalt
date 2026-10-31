@@ -13,7 +13,7 @@
     <string name="max_battery_alarm">充電上限警報</string>
     <string name="max_battery_alarm_description">充電時，電量達到設定值便發出提醒</string>
     <string name="low_battery_alarm">低電量警報</string>
-    <string name="low_battery_alarm_description">未充電時，電量低於設定值便發出提醒</string>
+    <string name="low_battery_alarm_description">電量低於設定值便發出提醒</string>
     <string name="threshold_label">%1$d%% 門檻</string>
     <string name="configure_alarm_settings">設定警報</string>
     <string name="preview_alarm">警報試聽</string>
@@ -113,8 +113,11 @@
     <string name="notification_low_battery_title">🪫 低電量警告！</string>
     <string name="notification_max_battery_message">電量已達到設定值，請拔除充電器。</string>
     <string name="notification_low_battery_message">電池電量過低，請盡快充電。</string>
-    <string name="tile_alarm_on">警報已開啟</string>
-    <string name="tile_alarm_off">警報已關閉</string>
+    <string name="alarm_status_enabled">啟用</string>
+    <string name="alarm_status_disabled">停用</string>
+    <string name="alarm_status_format">上限 %1$d%%：%2$s・下限 %3$d%%：%4$s</string>
+    <string name="tile_alarm_on">上限警報已啟用</string>
+    <string name="tile_alarm_off">上限警報已停用</string>
     <string name="tile_monitoring">監控中</string>
     <string name="tile_disabled">已停用</string>
 
