@@ -7,13 +7,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Required to keep CPU alive for alarm wake lock -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Required for full-screen alarm intent on Android 14+ -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-
 
     <application
         android:allowBackup="true"
@@ -35,18 +33,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Long-pressing the Quick Settings tile opens the app instead of app info -->
+            <!-- Long-pressing the Quick Settings tile opens the app. -->
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
             </intent-filter>
         </activity>
 
-        <!--
-            AlarmActivity — full-screen overlay that appears when an alarm fires.
-            showWhenLocked + turnScreenOn ensure it pops up on a locked/off screen.
-            singleInstance prevents stacking multiple alarm screens.
-            excludeFromRecents hides it from the recent apps list.
-        -->
+        <!-- Full-screen alarm UI -->
         <activity
             android:name=".AlarmActivity"
             android:exported="false"
@@ -77,10 +70,7 @@
             </intent-filter>
         </service>
 
-        <!--
-            FileProvider — allows sharing the app's own APK via a content:// URI.
-            The authority must be unique per app; using .fileprovider suffix is convention.
-        -->
+        <!-- Shares the app's own APK through a content:// URI. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
