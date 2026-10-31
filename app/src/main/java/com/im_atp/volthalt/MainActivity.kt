@@ -75,14 +75,20 @@ class MainActivity : ComponentActivity() {
             // Read theme preference reactively — changes in Settings apply immediately.
             val themeMode by preferencesManager.themeModeFlow.collectAsState(initial = "system")
             val systemDark = isSystemInDarkTheme()
+            val useComfort = themeMode == "comfort"
             val useDark = when (themeMode) {
-                "dark"  -> true
-                "light" -> false
-                else    -> systemDark
+                "dark"    -> true
+                "light"   -> false
+                "comfort" -> false
+                else      -> systemDark
             }
 
             // Dynamic color is intentionally disabled to keep the curated VoltHalt palette.
-            VoltHaltTheme(darkTheme = useDark, dynamicColor = false) {
+            VoltHaltTheme(
+                darkTheme = useDark,
+                comfortTheme = useComfort,
+                dynamicColor = false
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
