@@ -22,10 +22,10 @@ private val PitchBlackColorScheme = darkColorScheme(
     onPrimary          = Color(0xFF0F172A),
     primaryContainer   = Color(0xFF2B334A),
     onPrimaryContainer = Color(0xFFD8E2FF),
-    secondary          = Color(0xFF4CAF50),
-    onSecondary        = Color(0xFFFFFFFF),
+    secondary          = Color(0xFF4ADE80),
+    onSecondary        = Color(0xFF102016),
     tertiary           = Color(0xFFFB923C),
-    onTertiary         = Color(0xFF000000),
+    onTertiary         = Color(0xFF241307),
     background         = Color(0xFF000000),
     surface            = Color(0xFF1E2028),
     surfaceVariant     = Color(0xFF272932),
@@ -42,9 +42,9 @@ private val ProfessionalLightColorScheme = lightColorScheme(
     onPrimary          = Color(0xFFFFFFFF),
     primaryContainer   = Color(0xFFDBEAFE),
     onPrimaryContainer = Color(0xFF1E40AF),
-    secondary          = Color(0xFF16A34A),
+    secondary          = Color(0xFF15803D),
     onSecondary        = Color(0xFFFFFFFF),
-    tertiary           = Color(0xFFEA580C),
+    tertiary           = Color(0xFFC2410C),
     onTertiary         = Color(0xFFFFFFFF),
     background         = Color(0xFFFAFAFA),
     surface            = Color(0xFFFFFFFF),
@@ -56,13 +56,39 @@ private val ProfessionalLightColorScheme = lightColorScheme(
     outlineVariant     = Color(0xFFCBD5E1)
 )
 
+// Comfort theme — medium-bright warm neutral surfaces with muted green/orange accents.
+private val ComfortColorScheme = lightColorScheme(
+    primary            = Color(0xFF526B50),
+    onPrimary          = Color(0xFFFFFFFF),
+    primaryContainer   = Color(0xFFD5E0D1),
+    onPrimaryContainer = Color(0xFF263B27),
+    secondary          = Color(0xFF5D7958),
+    onSecondary        = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFDCE7D6),
+    onSecondaryContainer = Color(0xFF263D25),
+    tertiary           = Color(0xFFA96535),
+    onTertiary         = Color(0xFFFFFFFF),
+    tertiaryContainer  = Color(0xFFF1DDCB),
+    onTertiaryContainer = Color(0xFF42230F),
+    background         = Color(0xFFDFE1D6),
+    surface            = Color(0xFFE9EAE0),
+    surfaceVariant     = Color(0xFFD5D8CD),
+    onBackground       = Color(0xFF30382F),
+    onSurface          = Color(0xFF30382F),
+    onSurfaceVariant   = Color(0xFF596254),
+    outline            = Color(0xFFAEB4A6),
+    outlineVariant     = Color(0xFFC7CCBF)
+)
+
 @Composable
 fun VoltHaltTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
+    comfortTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
+        comfortTheme -> ComfortColorScheme
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -71,12 +97,18 @@ fun VoltHaltTheme(
         else      -> ProfessionalLightColorScheme
     }
 
+    // Comfort mode is a light surface even when the device itself is in dark mode.
+    val useDarkSystemBars = darkTheme && !comfortTheme
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            val backgroundColor = colorScheme.background.toArgb()
+            window.statusBarColor = backgroundColor
+            window.navigationBarColor = backgroundColor
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.isAppearanceLightStatusBars = !useDarkSystemBars
+            insetsController.isAppearanceLightNavigationBars = !useDarkSystemBars
         }
     }
 
