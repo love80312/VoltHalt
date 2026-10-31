@@ -55,6 +55,7 @@
     <string name="theme_system">跟隨系統</string>
     <string name="theme_light">淺色</string>
     <string name="theme_dark">深色</string>
+    <string name="theme_comfort">護眼</string>
     <string name="alarm_sound">警報音效</string>
     <string name="alarm_sound_description">選擇鈴聲或語音訊息</string>
     <string name="ringtone">鈴聲</string>
@@ -62,6 +63,9 @@
     <string name="custom_ringtone_selected">已選取自訂鈴聲</string>
     <string name="default_alarm_ringtone">系統預設鬧鐘鈴聲</string>
     <string name="change">變更</string>
+    <string name="system_ringtone">系統鈴聲</string>
+    <string name="select_audio_file">選擇音訊檔</string>
+    <string name="audio_file_access_error">無法持續存取這個音訊檔，請重新選取其他檔案。</string>
     <string name="spoken_when_alarm_fires">警報觸發時播放的語音：</string>
     <string name="tts_placeholder">輸入警報時要播報的內容…</string>
     <string name="save_message">儲存訊息</string>
