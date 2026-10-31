@@ -2,6 +2,7 @@ package com.im_atp.volthalt
 
 import android.Manifest
 import android.app.NotificationManager
+import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -11,10 +12,17 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import android.app.StatusBarManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,14 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -48,7 +49,6 @@ import com.im_atp.volthalt.ui.screens.SetupScreen
 import com.im_atp.volthalt.ui.theme.VoltHaltTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import androidx.lifecycle.lifecycleScope
 
 class MainActivity : ComponentActivity() {
 
@@ -77,10 +77,10 @@ class MainActivity : ComponentActivity() {
             val systemDark = isSystemInDarkTheme()
             val useComfort = themeMode == "comfort"
             val useDark = when (themeMode) {
-                "dark"    -> true
-                "light"   -> false
+                "dark" -> true
+                "light" -> false
                 "comfort" -> false
-                else      -> systemDark
+                else -> systemDark
             }
 
             // Dynamic color is intentionally disabled to keep the curated VoltHalt palette.
@@ -98,6 +98,7 @@ class MainActivity : ComponentActivity() {
                     var startDestination by remember { mutableStateOf<String?>(null) }
 
                     LaunchedEffect(Unit) {
+                        preferencesManager.initializeMonitoringEnabledIfNeeded()
                         val setupDone = preferencesManager.setupCompletedFlow.first()
                         if (setupDone) checkPermissionsAndStartService()
                         startDestination = if (setupDone) "main" else "setup"
@@ -189,11 +190,9 @@ class MainActivity : ComponentActivity() {
 
     private fun startBatteryService() {
         lifecycleScope.launch {
-            val maxAlarmEnabled = preferencesManager.alarmEnabledFlow.first()
-            val lowAlarmEnabled = preferencesManager.lowAlarmEnabledFlow.first()
-
-            // The foreground service is required by either alarm type.
-            if (maxAlarmEnabled || lowAlarmEnabled) {
+            preferencesManager.initializeMonitoringEnabledIfNeeded()
+            // The app must not restart monitoring when the tile's master switch is off.
+            if (preferencesManager.monitoringEnabledFlow.first()) {
                 val intent = Intent(this@MainActivity, BatteryService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(intent)

@@ -11,12 +11,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-/**
- * Restarts battery monitoring after the system finishes booting.
- *
- * Monitoring is resumed only after the initial setup has completed and at
- * least one of the two alarm types is enabled.
- */
+/** Restarts battery monitoring after boot only when the master switch is on. */
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
@@ -28,14 +23,10 @@ class BootReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 val preferencesManager = PreferencesManager(appContext)
+                preferencesManager.initializeMonitoringEnabledIfNeeded()
+                if (!preferencesManager.setupCompletedFlow.first()) return@launch
 
-                val setupCompleted = preferencesManager.setupCompletedFlow.first()
-                if (!setupCompleted) return@launch
-
-                val maxAlarmEnabled = preferencesManager.alarmEnabledFlow.first()
-                val lowAlarmEnabled = preferencesManager.lowAlarmEnabledFlow.first()
-
-                if (maxAlarmEnabled || lowAlarmEnabled) {
+                if (preferencesManager.monitoringEnabledFlow.first()) {
                     val serviceIntent = Intent(appContext, BatteryService::class.java)
                     ContextCompat.startForegroundService(appContext, serviceIntent)
                 }

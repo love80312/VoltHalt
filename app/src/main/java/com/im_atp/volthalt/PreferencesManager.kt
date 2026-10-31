@@ -30,6 +30,10 @@ class PreferencesManager(private val context: Context) {
         private val LOW_RINGTONE_URI     = stringPreferencesKey("low_ringtone_uri")
         val LOW_ALARM_VOLUME             = intPreferencesKey("low_alarm_volume")
 
+        // Independent master switch for background monitoring.
+        // Missing values are migrated logically from the existing alarm settings.
+        private val MONITORING_ENABLED   = booleanPreferencesKey("monitoring_enabled")
+
         // First-run setup
         private val SETUP_COMPLETED      = booleanPreferencesKey("setup_completed")
 
@@ -57,6 +61,14 @@ class PreferencesManager(private val context: Context) {
     val lowRingtoneUriFlow: Flow<String?>     = context.dataStore.data.map { it[LOW_RINGTONE_URI] }
     val lowAlarmVolumeFlow: Flow<Int>         = context.dataStore.data.map { it[LOW_ALARM_VOLUME] ?: 80 }
 
+    // Independent monitoring switch.
+    // For existing installations without this key, retain the previous behavior:
+    // monitoring is considered enabled when either alarm was enabled.
+    val monitoringEnabledFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[MONITORING_ENABLED]
+            ?: ((preferences[ALARM_ENABLED] ?: false) || (preferences[LOW_ALARM_ENABLED] ?: false))
+    }
+
     // Setup flow
     val setupCompletedFlow: Flow<Boolean> = context.dataStore.data.map { it[SETUP_COMPLETED] ?: false }
 
@@ -68,6 +80,18 @@ class PreferencesManager(private val context: Context) {
     val maxTtsTextFlow: Flow<String>   = context.dataStore.data.map { it[MAX_TTS_TEXT] ?: context.getString(R.string.default_max_tts) }
     val lowSoundTypeFlow: Flow<String> = context.dataStore.data.map { it[LOW_SOUND_TYPE] ?: "ringtone" }
     val lowTtsTextFlow: Flow<String>   = context.dataStore.data.map { it[LOW_TTS_TEXT] ?: context.getString(R.string.default_low_tts) }
+
+    // Initialize the independent monitoring switch once for existing installations.
+    // Older versions used the alarm settings to determine whether monitoring was active.
+    suspend fun initializeMonitoringEnabledIfNeeded() {
+        context.dataStore.edit { preferences ->
+            if (MONITORING_ENABLED !in preferences) {
+                preferences[MONITORING_ENABLED] =
+                    (preferences[ALARM_ENABLED] ?: false) ||
+                    (preferences[LOW_ALARM_ENABLED] ?: false)
+            }
+        }
+    }
 
     // Max battery alarm setters
     suspend fun setAlarmEnabled(enabled: Boolean)       { context.dataStore.edit { it[ALARM_ENABLED] = enabled } }
@@ -82,6 +106,9 @@ class PreferencesManager(private val context: Context) {
     suspend fun setLowVibrationEnabled(enabled: Boolean){ context.dataStore.edit { it[LOW_VIBRATION_ENABLED] = enabled } }
     suspend fun setLowRingtoneUri(uriString: String)    { context.dataStore.edit { it[LOW_RINGTONE_URI] = uriString } }
     suspend fun setLowAlarmVolume(volume: Int)          { context.dataStore.edit { it[LOW_ALARM_VOLUME] = volume.coerceIn(0, 100) } }
+
+    // Monitoring setter
+    suspend fun setMonitoringEnabled(enabled: Boolean)  { context.dataStore.edit { it[MONITORING_ENABLED] = enabled } }
 
     // Setup setter
     suspend fun setSetupCompleted(completed: Boolean)   { context.dataStore.edit { it[SETUP_COMPLETED] = completed } }

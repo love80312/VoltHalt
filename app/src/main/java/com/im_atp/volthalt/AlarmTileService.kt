@@ -15,14 +15,13 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
- * Quick Settings tile for the charging-limit alarm.
- *
- * The tile's active state and click action represent the max-battery alarm.
- * Its subtitle also reports the low-battery alarm state and both thresholds.
+ * Quick Settings tile for starting and stopping battery monitoring.
+ * The tile does not change either alarm's enabled setting or threshold.
  */
 class AlarmTileService : TileService() {
 
     private data class TileStatus(
+        val monitoringEnabled: Boolean,
         val maxEnabled: Boolean,
         val maxTarget: Int,
         val lowEnabled: Boolean,
@@ -33,6 +32,7 @@ class AlarmTileService : TileService() {
     private lateinit var preferencesManager: PreferencesManager
     private var listeningJob: Job? = null
     private var currentStatus = TileStatus(
+        monitoringEnabled = false,
         maxEnabled = false,
         maxTarget = 80,
         lowEnabled = false,
@@ -48,13 +48,15 @@ class AlarmTileService : TileService() {
         super.onStartListening()
         listeningJob?.cancel()
         listeningJob = serviceScope.launch {
+            preferencesManager.initializeMonitoringEnabledIfNeeded()
             combine(
+                preferencesManager.monitoringEnabledFlow,
                 preferencesManager.alarmEnabledFlow,
                 preferencesManager.targetPercentageFlow,
                 preferencesManager.lowAlarmEnabledFlow,
                 preferencesManager.lowTargetPercentageFlow
-            ) { maxEnabled, maxTarget, lowEnabled, lowTarget ->
-                TileStatus(maxEnabled, maxTarget, lowEnabled, lowTarget)
+            ) { monitoringEnabled, maxEnabled, maxTarget, lowEnabled, lowTarget ->
+                TileStatus(monitoringEnabled, maxEnabled, maxTarget, lowEnabled, lowTarget)
             }.collect { status ->
                 currentStatus = status
                 applyTileState(status)
@@ -71,39 +73,33 @@ class AlarmTileService : TileService() {
     override fun onClick() {
         super.onClick()
 
-        // The tile continues to toggle only the charging-limit alarm.
-        val newActive = qsTile?.state != Tile.STATE_ACTIVE
-        currentStatus = currentStatus.copy(maxEnabled = newActive)
+        val newMonitoringState = !currentStatus.monitoringEnabled
+        currentStatus = currentStatus.copy(monitoringEnabled = newMonitoringState)
         applyTileState(currentStatus)
+
         serviceScope.launch {
             try {
-                // Persist first so BatteryService reads the latest alarm states.
-                preferencesManager.setAlarmEnabled(newActive)
-
-                if (newActive) {
-                    ContextCompat.startForegroundService(
-                        applicationContext,
-                        Intent(applicationContext, BatteryService::class.java)
-                    )
+                val serviceIntent = Intent(applicationContext, BatteryService::class.java)
+                if (newMonitoringState) {
+                    serviceIntent.action = BatteryService.ACTION_START_MONITORING
+                    ContextCompat.startForegroundService(applicationContext, serviceIntent)
                 } else {
-                    ContextCompat.startForegroundService(
-                        applicationContext,
-                        Intent(applicationContext, BatteryService::class.java).apply {
-                            action = BatteryService.ACTION_STOP_MAX_ALARM_FROM_TILE
-                        }
-                    )
+                    serviceIntent.action = BatteryService.ACTION_STOP_SERVICE
+                    ContextCompat.startForegroundService(applicationContext, serviceIntent)
                 }
             } catch (_: Exception) {
-                // Some OEMs restrict background service starts. The app UI can still
-                // be opened to review permissions and monitoring settings.
+                // The service may be restricted by some device manufacturers.
+                // Opening the app still allows the user to review permissions.
             }
         }
     }
 
     private fun applyTileState(status: TileStatus) {
         val tile = qsTile ?: return
-        tile.state = if (status.maxEnabled) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        tile.label = getString(if (status.maxEnabled) R.string.tile_alarm_on else R.string.tile_alarm_off)
+        tile.state = if (status.monitoringEnabled) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+        tile.label = getString(
+            if (status.monitoringEnabled) R.string.tile_monitoring else R.string.tile_disabled
+        )
 
         val statusText = getString(
             R.string.alarm_status_format,
